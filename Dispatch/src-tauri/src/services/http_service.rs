@@ -1,0 +1,287 @@
+use base64::Engine;
+use reqwest::header::CONTENT_TYPE;
+
+use crate::models::request::{ApiRequest, RequestBodyType};
+use crate::models::response::ApiResponse;
+
+use std::collections::HashMap;
+use std::time::Instant;
+
+const SUPPORTED_METHODS: [&str; 7] = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
+
+pub async fn send_request(request: ApiRequest) -> Result<ApiResponse, String> {
+    let start = Instant::now();
+    let method = request.method.to_uppercase();
+
+    if !SUPPORTED_METHODS.contains(&method.as_str()) {
+        return Err(format!("Unsupported HTTP method: {}", request.method));
+    }
+
+    let client = reqwest::Client::new();
+    let mut builder = client.request(
+        reqwest::Method::from_bytes(method.as_bytes()).map_err(|error| error.to_string())?,
+        &request.url,
+    );
+
+    for (key, value) in &request.headers {
+        builder = builder.header(key, value);
+    }
+
+    if let Some(auth) = request.auth.clone() {
+        builder = auth.apply(builder);
+    }
+
+    builder = apply_body(builder, &request)?;
+
+    let response = builder.send().await.map_err(|error| error.to_string())?;
+    let status_code = response.status().as_u16();
+    let response_headers: HashMap<String, String> = response
+        .headers()
+        .iter()
+        .map(|(name, value)| {
+            (
+                name.to_string(),
+                value.to_str().unwrap_or("<binary>").to_string(),
+            )
+        })
+        .collect();
+    let body = response.text().await.map_err(|error| error.to_string())?;
+
+    Ok(ApiResponse {
+        status: status_code,
+        response_time_ms: start.elapsed().as_millis(),
+        body,
+        headers: response_headers,
+    })
+}
+
+fn apply_body(
+    mut builder: reqwest::RequestBuilder,
+    request: &ApiRequest,
+) -> Result<reqwest::RequestBuilder, String> {
+    let has_content_type = request
+        .headers
+        .keys()
+        .any(|key| key.eq_ignore_ascii_case(CONTENT_TYPE.as_str()));
+
+    match request.body_type {
+        RequestBodyType::None => {}
+        RequestBodyType::Json => {
+            if !has_content_type {
+                builder = builder.header(CONTENT_TYPE, "application/json");
+            }
+            builder = builder.body(request.body.clone());
+        }
+        RequestBodyType::Text => {
+            if !has_content_type {
+                builder = builder.header(CONTENT_TYPE, "text/plain; charset=utf-8");
+            }
+            builder = builder.body(request.body.clone());
+        }
+        RequestBodyType::Xml => {
+            if !has_content_type {
+                builder = builder.header(CONTENT_TYPE, "application/xml");
+            }
+            builder = builder.body(request.body.clone());
+        }
+        RequestBodyType::FormData => {
+            let form = request
+                .form_fields
+                .iter()
+                .filter(|field| !field.key.trim().is_empty())
+                .fold(reqwest::multipart::Form::new(), |form, field| {
+                    form.text(field.key.clone(), field.value.clone())
+                });
+            builder = builder.multipart(form);
+        }
+        RequestBodyType::XWwwFormUrlencoded => {
+            let encoded = url::form_urlencoded::Serializer::new(String::new())
+                .extend_pairs(
+                    request
+                        .form_fields
+                        .iter()
+                        .filter(|field| !field.key.trim().is_empty())
+                        .map(|field| (field.key.as_str(), field.value.as_str())),
+                )
+                .finish();
+            if !has_content_type {
+                builder = builder.header(CONTENT_TYPE, "application/x-www-form-urlencoded");
+            }
+            builder = builder.body(encoded);
+        }
+        RequestBodyType::Binary => {
+            let binary = request
+                .binary
+                .as_ref()
+                .ok_or("Choose a binary file before sending the request.")?;
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(&binary.data_base64)
+                .map_err(|error| format!("Invalid binary payload: {error}"))?;
+            if !has_content_type {
+                let mime_type = if binary.mime_type.is_empty() {
+                    "application/octet-stream"
+                } else {
+                    &binary.mime_type
+                };
+                builder = builder.header(CONTENT_TYPE, mime_type);
+            }
+            builder = builder.body(bytes);
+        }
+    }
+
+    Ok(builder)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::request::{BinaryBody, BodyField};
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::mpsc::{self, Receiver};
+    use std::thread;
+
+    fn capture_one_request() -> (String, Receiver<String>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind test server");
+        let address = listener.local_addr().expect("read test address");
+        let (sender, receiver) = mpsc::channel();
+
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept request");
+            let mut bytes = Vec::new();
+            let mut chunk = [0_u8; 4096];
+            let mut expected_length = None;
+
+            loop {
+                let size = stream.read(&mut chunk).expect("read request");
+                if size == 0 {
+                    break;
+                }
+                bytes.extend_from_slice(&chunk[..size]);
+
+                if expected_length.is_none() {
+                    if let Some(header_end) = bytes.windows(4).position(|part| part == b"\r\n\r\n")
+                    {
+                        let headers = String::from_utf8_lossy(&bytes[..header_end]);
+                        expected_length = headers
+                            .lines()
+                            .find_map(|line| line.split_once(':'))
+                            .filter(|(name, _)| name.eq_ignore_ascii_case("content-length"))
+                            .and_then(|(_, value)| value.trim().parse::<usize>().ok());
+                        if expected_length.unwrap_or(0) == 0 {
+                            break;
+                        }
+                    }
+                }
+
+                if let (Some(header_end), Some(content_length)) = (
+                    bytes.windows(4).position(|part| part == b"\r\n\r\n"),
+                    expected_length,
+                ) {
+                    if bytes.len() >= header_end + 4 + content_length {
+                        break;
+                    }
+                }
+            }
+
+            sender
+                .send(String::from_utf8_lossy(&bytes).into_owned())
+                .expect("send captured request");
+            let _ = stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok");
+        });
+
+        (format!("http://{address}"), receiver)
+    }
+
+    fn request(url: String, method: &str, body_type: RequestBodyType) -> ApiRequest {
+        ApiRequest {
+            method: method.to_string(),
+            url,
+            body: String::new(),
+            body_type,
+            form_fields: Vec::new(),
+            binary: None,
+            headers: HashMap::new(),
+            auth: None,
+        }
+    }
+
+    #[test]
+    fn sends_head_and_options_requests() {
+        for method in ["HEAD", "OPTIONS"] {
+            let (url, received) = capture_one_request();
+            tauri::async_runtime::block_on(send_request(request(
+                url,
+                method,
+                RequestBodyType::None,
+            )))
+            .expect("send supported method");
+            assert!(received
+                .recv()
+                .expect("captured request")
+                .starts_with(&format!("{method} / HTTP/1.1")));
+        }
+    }
+
+    #[test]
+    fn encodes_urlencoded_and_binary_bodies() {
+        let (url, received) = capture_one_request();
+        let mut form_request = request(url, "POST", RequestBodyType::XWwwFormUrlencoded);
+        form_request.form_fields = vec![BodyField {
+            key: "name".into(),
+            value: "Mini Postman".into(),
+        }];
+        tauri::async_runtime::block_on(send_request(form_request)).expect("send form request");
+        let form_message = received.recv().expect("captured form request");
+        assert!(form_message.contains("content-type: application/x-www-form-urlencoded"));
+        assert!(form_message.ends_with("name=Mini+Postman"));
+
+        let (url, received) = capture_one_request();
+        let mut binary_request = request(url, "POST", RequestBodyType::Binary);
+        binary_request.binary = Some(BinaryBody {
+            name: "sample.bin".into(),
+            mime_type: "application/octet-stream".into(),
+            data_base64: "AQID".into(),
+        });
+        tauri::async_runtime::block_on(send_request(binary_request)).expect("send binary request");
+        let binary_message = received.recv().expect("captured binary request");
+        assert!(binary_message.contains("content-type: application/octet-stream"));
+        assert!(binary_message.ends_with("\u{1}\u{2}\u{3}"));
+    }
+
+    #[test]
+    fn sends_json_text_xml_and_multipart_bodies() {
+        for (body_type, content_type, body) in [
+            (RequestBodyType::Json, "application/json", "{\"ok\":true}"),
+            (
+                RequestBodyType::Text,
+                "text/plain; charset=utf-8",
+                "plain text",
+            ),
+            (RequestBodyType::Xml, "application/xml", "<ok>true</ok>"),
+        ] {
+            let (url, received) = capture_one_request();
+            let mut typed_request = request(url, "POST", body_type);
+            typed_request.body = body.into();
+            tauri::async_runtime::block_on(send_request(typed_request))
+                .expect("send typed body request");
+            let message = received.recv().expect("captured typed body request");
+            assert!(message.contains(&format!("content-type: {content_type}")));
+            assert!(message.ends_with(body));
+        }
+
+        let (url, received) = capture_one_request();
+        let mut multipart_request = request(url, "POST", RequestBodyType::FormData);
+        multipart_request.form_fields = vec![BodyField {
+            key: "title".into(),
+            value: "MiniPostman".into(),
+        }];
+        tauri::async_runtime::block_on(send_request(multipart_request))
+            .expect("send multipart request");
+        let multipart_message = received.recv().expect("captured multipart request");
+        assert!(multipart_message.contains("content-type: multipart/form-data; boundary="));
+        assert!(multipart_message.contains("name=\"title\""));
+        assert!(multipart_message.contains("MiniPostman"));
+    }
+}
