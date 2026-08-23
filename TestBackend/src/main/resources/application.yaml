@@ -1,0 +1,14 @@
+spring:
+  application:
+    name: TestBackend
+  autoconfigure:
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+
+debug: false
+
+server:
+  port: 8080
+
+logging:
+  level:
+    org.springframework.security: WARN

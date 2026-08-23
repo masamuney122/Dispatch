@@ -1,0 +1,13 @@
+{
+  "name": "Dispatch Web",
+  "short_name": "Dispatch",
+  "description": "Yerel workspace kullanan tarayıcı tabanlı API istemcisi",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#202020",
+  "theme_color": "#202020",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
+
