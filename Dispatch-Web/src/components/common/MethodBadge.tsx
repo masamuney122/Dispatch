@@ -12,7 +12,7 @@ interface MethodBadgeProps {
  */
 export const MethodBadge: React.FC<MethodBadgeProps> = ({ method, compact = false }) => (
   <span 
-    className={`${compact ? "w-[50px] text-[10px]" : "w-[52px] text-[11px]"} shrink-0 font-bold tracking-wider`}
+    className={`${compact ? "text-[10px]" : "w-[52px] text-[11px]"} shrink-0 font-bold tracking-wider`}
     style={{ color: getMethodHexColor(method) }}
   >
     {method.toUpperCase()}

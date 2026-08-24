@@ -5,13 +5,14 @@ import type {
   OpenApiImportOptions,
   OpenApiImportPreview,
   OpenApiImportResult,
+  OpenApiSource,
 } from "../types/openapi";
 
-export const inspectOpenApi = (path: string) =>
-  invoke<OpenApiImportPreview>("inspect_openapi", { path });
+export const inspectOpenApi = (source: OpenApiSource) =>
+  invoke<OpenApiImportPreview>("inspect_openapi", { source });
 
-export const importOpenApi = (path: string, options: OpenApiImportOptions) =>
-  invoke<OpenApiImportResult>("import_openapi", { path, options });
+export const importOpenApi = (source: OpenApiSource, options: OpenApiImportOptions) =>
+  invoke<OpenApiImportResult>("import_openapi", { source, options });
 
 export const exportCollectionOpenApi = (
   collectionId: string,

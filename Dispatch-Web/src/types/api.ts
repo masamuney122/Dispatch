@@ -3,6 +3,7 @@ export type RequestBodyType =
   | "none"
   | "json"
   | "text"
+  | "html"
   | "xml"
   | "form-data"
   | "x-www-form-urlencoded"
@@ -38,6 +39,7 @@ export interface ApiResponse {
   responseTimeMs: number;
   sizeBytes: number;
   body: string;
+  bodyBase64?: string;
   headers: Record<string, string>;
 }
 

@@ -3,11 +3,13 @@ use std::sync::Mutex;
 use crate::models::environment::AppState;
 use crate::models::request::ApiRequest;
 use crate::models::response::ApiResponse;
+use crate::models::workspace::WorkspaceRuntimeState;
 use crate::services::{environment_service, http_service};
 
 #[tauri::command]
 pub async fn send_request(
     state: tauri::State<'_, Mutex<AppState>>,
+    runtime: tauri::State<'_, Mutex<WorkspaceRuntimeState>>,
     mut request: ApiRequest,
 ) -> Result<ApiResponse, String> {
     // Resolve environment variables before sending
@@ -18,5 +20,12 @@ pub async fn send_request(
 
     environment_service::resolve_request(&mut request, &variables);
 
-    http_service::send_request(request).await
+    let global_settings = runtime
+        .lock()
+        .map_err(|error| error.to_string())?
+        .settings
+        .http
+        .clone();
+
+    http_service::send_request_with_settings(request, &global_settings).await
 }

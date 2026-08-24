@@ -94,6 +94,8 @@ pub fn run() {
             commands::workspace_command::close_workspace,
             commands::workspace_command::get_current_workspace,
             commands::workspace_command::list_recent_workspaces,
+            commands::workspace_command::get_http_settings,
+            commands::workspace_command::update_http_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

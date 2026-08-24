@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { RequestTabState, WorkspaceTab } from "../types/tab";
 import { createDefaultTab } from "../types/tab";
 import type { TabInfo } from "../components/layout/RequestTabsBar";
+import type { RequestHttpSettings } from "../types/httpSettings";
 
 /**
  * Manages the collection of open request tabs:
@@ -39,6 +40,7 @@ export function useRequestTabs() {
       "formFields",
       "binary",
       "auth",
+      "settings",
     ];
     const marksDirty = editableKeys.some((key) => key in updates);
     setTabs((prevTabs) =>
@@ -51,6 +53,17 @@ export function useRequestTabs() {
             }
           : tab
       )
+    );
+  };
+
+  const clearHttpSettingOverrides = (keys: Array<keyof RequestHttpSettings>) => {
+    if (keys.length === 0) return;
+    setTabs((current) =>
+      current.map((tab) => {
+        const settings = { ...tab.settings };
+        keys.forEach((key) => delete settings[key]);
+        return { ...tab, settings };
+      })
     );
   };
 
@@ -201,6 +214,7 @@ export function useRequestTabs() {
     tabsInfoList,
     setActiveTabId,
     updateActiveTab,
+    clearHttpSettingOverrides,
     handleAddTab,
     handleCloseTab,
     openEnvironmentTab,

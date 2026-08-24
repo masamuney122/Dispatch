@@ -3,6 +3,35 @@ use std::collections::HashMap;
 
 use crate::models::auth::AuthConfig;
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum HttpVersionPreference {
+    Auto,
+    Http1,
+    Http2,
+}
+
+impl Default for HttpVersionPreference {
+    fn default() -> Self {
+        Self::Auto
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RequestHttpSettings {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub http_version: Option<HttpVersionPreference>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verify_ssl: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub follow_redirects: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remove_referer_on_redirect: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_redirects: Option<usize>,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum RequestBodyType {
@@ -10,6 +39,7 @@ pub enum RequestBodyType {
     #[default]
     Json,
     Text,
+    Html,
     Xml,
     FormData,
     XWwwFormUrlencoded,
@@ -44,4 +74,18 @@ pub struct ApiRequest {
     pub headers: HashMap<String, String>,
     #[serde(default)]
     pub auth: Option<AuthConfig>,
+    #[serde(default)]
+    pub settings: RequestHttpSettings,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RequestHttpSettings;
+
+    #[test]
+    fn empty_request_settings_serialize_without_null_overrides() {
+        let value =
+            serde_json::to_value(RequestHttpSettings::default()).expect("serialize settings");
+        assert_eq!(value, serde_json::json!({}));
+    }
 }

@@ -17,6 +17,7 @@ const BODY_TYPES: Array<{ value: RequestBodyType; label: string }> = [
   { value: "none", label: "None" },
   { value: "json", label: "JSON" },
   { value: "text", label: "Text" },
+  { value: "html", label: "HTML" },
   { value: "xml", label: "XML" },
   { value: "form-data", label: "Form-data" },
   { value: "x-www-form-urlencoded", label: "x-www-form-urlencoded" },
@@ -26,6 +27,7 @@ const BODY_TYPES: Array<{ value: RequestBodyType; label: string }> = [
 const BODY_PLACEHOLDERS: Partial<Record<RequestBodyType, string>> = {
   json: '{\n  "key": "value"\n}',
   text: "Enter text payload here...",
+  html: "<!doctype html>\n<html>\n  <body>\n    <p>Hello</p>\n  </body>\n</html>",
   xml: "<root>\n  <key>value</key>\n</root>",
 };
 
@@ -164,7 +166,7 @@ export const BodyEditor: React.FC<BodyEditorProps> = ({
 
       {bodyType === "none" && <div className="border border-[#383838] rounded-lg bg-[#202020] px-4 py-8 text-center text-zinc-500">No request body will be sent.</div>}
 
-      {["json", "text", "xml"].includes(bodyType) && (
+      {["json", "text", "html", "xml"].includes(bodyType) && (
         <div className="border border-[#383838] rounded-lg bg-[#202020] overflow-hidden shadow-sm">
           <textarea value={body} onChange={(event) => onChangeBody(event.target.value)} rows={10} placeholder={BODY_PLACEHOLDERS[bodyType]} className="w-full bg-transparent p-4 font-mono text-xs text-zinc-200 leading-relaxed focus:outline-none resize-y min-h-[160px]" spellCheck={false} />
         </div>

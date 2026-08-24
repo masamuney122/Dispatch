@@ -411,6 +411,7 @@ pub fn create_request_in_collection(
             binary: None,
             headers: Default::default(),
             auth: None,
+            settings: Default::default(),
         },
         folder_id,
         order: sibling_max_order + 1,

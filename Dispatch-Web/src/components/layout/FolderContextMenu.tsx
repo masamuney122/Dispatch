@@ -10,6 +10,7 @@ export interface FolderContextMenuProps {
   onAddFolder: () => void;
   onRename: () => void;
   onDuplicate?: () => void;
+  onExportOpenApi?: () => void;
   onDelete: () => void;
 }
 
@@ -69,6 +70,7 @@ export const FolderContextMenu: React.FC<FolderContextMenuProps> = ({
   onAddFolder,
   onRename,
   onDuplicate,
+  onExportOpenApi,
   onDelete,
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -132,6 +134,7 @@ export const FolderContextMenu: React.FC<FolderContextMenuProps> = ({
           Duplicate
         </MenuItem>
       )}
+      {onExportOpenApi && <MenuItem onClick={handle(onExportOpenApi)}>Export as OpenAPI</MenuItem>}
 
       <Divider />
 

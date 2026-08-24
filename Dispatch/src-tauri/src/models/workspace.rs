@@ -63,6 +63,29 @@ pub struct AppSettings {
     pub last_workspace_path: Option<PathBuf>,
     pub recent_workspaces: Vec<RecentWorkspace>,
     pub active_environment_by_workspace: HashMap<String, String>,
+    pub http: GlobalHttpSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GlobalHttpSettings {
+    pub http_version: crate::models::request::HttpVersionPreference,
+    pub verify_ssl: bool,
+    pub follow_redirects: bool,
+    pub remove_referer_on_redirect: bool,
+    pub max_redirects: usize,
+}
+
+impl Default for GlobalHttpSettings {
+    fn default() -> Self {
+        Self {
+            http_version: crate::models::request::HttpVersionPreference::Auto,
+            verify_ssl: true,
+            follow_redirects: true,
+            remove_referer_on_redirect: false,
+            max_redirects: 10,
+        }
+    }
 }
 
 impl Default for AppSettings {
@@ -72,6 +95,7 @@ impl Default for AppSettings {
             last_workspace_path: None,
             recent_workspaces: Vec::new(),
             active_environment_by_workspace: HashMap::new(),
+            http: GlobalHttpSettings::default(),
         }
     }
 }

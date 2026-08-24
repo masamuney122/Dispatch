@@ -139,13 +139,11 @@ export const CollectionTreeNode: React.FC<CollectionTreeNodeProps> = ({
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const [isCreatingSubFolder, setIsCreatingSubFolder] = useState(false);
-  const [isCreatingRequest, setIsCreatingRequest] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
-  const [newRequestName, setNewRequestName] = useState("");
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const dotsRef = useRef<HTMLButtonElement>(null);
 
-  const indent = depth * 16;
+  const indent = depth * 11;
 
   // ── Request node ──────────────────────────────────────────────────────────
 
@@ -199,17 +197,17 @@ export const CollectionTreeNode: React.FC<CollectionTreeNodeProps> = ({
         {...attributes}
         {...listeners}
       >
-        <AdjacentDropIndicator intent={activeDropIntent} left={15 + indent} />
+        <AdjacentDropIndicator intent={activeDropIntent} left={11 + indent} />
         <div
           role="button"
           tabIndex={0}
           onClick={() => onSelectRequest(request)}
           onContextMenu={openRequestMenu}
           style={{
-            paddingLeft: `${15 + indent}px`,
-            paddingRight: "8px",
+            paddingLeft: `${11 + indent}px`,
+            paddingRight: "6px",
           }}
-          className={`w-full group flex min-h-[26px] items-center gap-1.5 rounded-md text-left transition-colors cursor-pointer ${
+          className={`w-full group flex min-h-[23px] items-center gap-1 rounded-md text-left transition-colors cursor-pointer ${
             isSelected
               ? "bg-[#333333] text-white"
               : "text-zinc-300 hover:bg-[#252525] hover:text-zinc-100"
@@ -296,14 +294,6 @@ export const CollectionTreeNode: React.FC<CollectionTreeNodeProps> = ({
     setIsCreatingSubFolder(false);
   };
 
-  const handleCreateRequest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await onCreateRequest(collectionId, folder.id);
-    setNewRequestName("");
-    setIsCreatingRequest(false);
-    if (!isExpanded) onToggleFolder(folder.id);
-  };
-
   const openContextMenu = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -326,19 +316,19 @@ export const CollectionTreeNode: React.FC<CollectionTreeNodeProps> = ({
   return (
     <div style={style}>
       <div className="relative">
-        <AdjacentDropIndicator intent={activeDropIntent} left={8 + indent} />
+        <AdjacentDropIndicator intent={activeDropIntent} left={5 + indent} />
         {/* Folder row */}
         <div
           ref={setNodeRef}
           {...attributes}
-          className={`group flex min-h-[28px] items-center gap-1.5 rounded-md cursor-pointer transition-colors text-zinc-300 ${
+          className={`group flex min-h-[24px] items-center gap-1 rounded-md cursor-pointer transition-colors text-zinc-300 ${
             isInsideDropTarget
               ? "bg-sky-500/20 ring-1 ring-inset ring-sky-400/50"
               : "hover:bg-[#252525]"
           }`}
           style={{
-            paddingLeft: `${8 + indent}px`,
-            paddingRight: "8px",
+            paddingLeft: `${5 + indent}px`,
+            paddingRight: "6px",
           }}
           onClick={() => onToggleFolder(folder.id)}
           onContextMenu={openContextMenu}
@@ -378,7 +368,7 @@ export const CollectionTreeNode: React.FC<CollectionTreeNodeProps> = ({
               onClick={(e) => {
                 e.stopPropagation();
                 if (!isExpanded) onToggleFolder(folder.id);
-                setIsCreatingRequest(true);
+                void onCreateRequest(collectionId, folder.id);
               }}
               className="rounded p-1 text-zinc-500 hover:text-zinc-100 hover:bg-[#303030] transition-colors"
               title="Add request"
@@ -407,7 +397,7 @@ export const CollectionTreeNode: React.FC<CollectionTreeNodeProps> = ({
           onClose={() => setContextMenu(null)}
           onAddRequest={() => {
             if (!isExpanded) onToggleFolder(folder.id);
-            setIsCreatingRequest(true);
+            void onCreateRequest(collectionId, folder.id);
           }}
           onAddFolder={() => {
             if (!isExpanded) onToggleFolder(folder.id);
@@ -425,46 +415,17 @@ export const CollectionTreeNode: React.FC<CollectionTreeNodeProps> = ({
           {/* Vertical guide line */}
           <div 
             className="absolute top-0 bottom-0 border-l border-[#2e2e2e] pointer-events-none" 
-            style={{ left: `${14 + indent}px` }} 
+            style={{ left: `${10 + indent}px` }} 
           />
           
-          {/* Inline: new request form */}
-          {isCreatingRequest && (
-            <form
-              onSubmit={(e) => void handleCreateRequest(e)}
-              className="flex gap-1.5 items-center py-1 relative z-10"
-              style={{
-                paddingLeft: `${24 + indent}px`,
-                paddingRight: "8px",
-              }}
-            >
-              <input
-                autoFocus
-                value={newRequestName}
-                onChange={(e) => setNewRequestName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") setIsCreatingRequest(false);
-                }}
-                placeholder="Request name"
-                className="flex-1 min-w-0 bg-[#141414] border border-[#383838] rounded text-xs text-zinc-100 focus:outline-none focus:border-[#555] px-2 py-1"
-              />
-              <button
-                type="submit"
-                className="rounded bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold px-2 py-1 transition-colors"
-              >
-                Add
-              </button>
-            </form>
-          )}
-
           {/* Inline: new subfolder form */}
           {isCreatingSubFolder && (
             <form
               onSubmit={(e) => void handleCreateSubFolder(e)}
               className="flex gap-1.5 items-center py-1 relative z-10"
               style={{
-                paddingLeft: `${24 + indent}px`,
-                paddingRight: "8px",
+                paddingLeft: `${19 + indent}px`,
+                paddingRight: "6px",
               }}
             >
               <input

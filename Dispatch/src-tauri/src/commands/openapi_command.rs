@@ -4,21 +4,21 @@ use std::sync::Mutex;
 use crate::models::environment::AppState;
 use crate::models::openapi::{
     OpenApiExportOptions, OpenApiExportResult, OpenApiImportOptions, OpenApiImportPreview,
-    OpenApiImportResult,
+    OpenApiImportResult, OpenApiSource,
 };
 use crate::models::workspace::WorkspaceRuntimeState;
 use crate::services::openapi_service;
 
 #[tauri::command]
-pub fn inspect_openapi(path: String) -> Result<OpenApiImportPreview, String> {
-    openapi_service::inspect_openapi(&PathBuf::from(path))
+pub fn inspect_openapi(source: OpenApiSource) -> Result<OpenApiImportPreview, String> {
+    openapi_service::inspect_openapi_source(&source)
 }
 
 #[tauri::command]
 pub fn import_openapi(
     runtime: tauri::State<'_, Mutex<WorkspaceRuntimeState>>,
     environment_state: tauri::State<'_, Mutex<AppState>>,
-    path: String,
+    source: OpenApiSource,
     options: OpenApiImportOptions,
 ) -> Result<OpenApiImportResult, String> {
     let session = runtime
@@ -30,12 +30,7 @@ pub fn import_openapi(
     let mut environment_state = environment_state
         .lock()
         .map_err(|error| error.to_string())?;
-    openapi_service::import_openapi(
-        &session,
-        &mut environment_state,
-        &PathBuf::from(path),
-        &options,
-    )
+    openapi_service::import_openapi_source(&session, &mut environment_state, &source, &options)
 }
 
 #[tauri::command]

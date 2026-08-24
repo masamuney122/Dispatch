@@ -1,6 +1,7 @@
 import type { HttpMethod, RequestSectionTab, BinaryBody, BodyField, RequestBodyType } from "./request";
 import type { ApiResponse } from "./response";
 import type { AuthConfig } from "./auth";
+import type { RequestHttpSettings } from "./httpSettings";
 
 export interface QueryParamItem {
   key: string;
@@ -31,6 +32,7 @@ export interface RequestTabState {
   formFields: BodyField[];
   binary?: BinaryBody;
   auth: AuthConfig;
+  settings: RequestHttpSettings;
   activeSectionTab: RequestSectionTab;
   response: ApiResponse | null;
   loading: boolean;
@@ -70,6 +72,7 @@ export const createDefaultTab = (index: number = 1): RequestTabState => ({
   bodyType: "json",
   formFields: [],
   auth: { type: "None" },
+  settings: {},
   activeSectionTab: "Params",
   response: null,
   loading: false,

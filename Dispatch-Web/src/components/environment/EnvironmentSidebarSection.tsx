@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Environment } from "../../types/environment";
 import { OverlayScrollArea } from "../common/OverlayScrollArea";
+import { EnvironmentContextMenu } from "./EnvironmentContextMenu";
 
 interface EnvironmentSidebarSectionProps {
   environments: Environment[];
@@ -30,6 +31,7 @@ export const EnvironmentSidebarSection: React.FC<
     const [creating, setCreating] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editingName, setEditingName] = useState("");
+    const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
 
     const filteredEnvironments = environments.filter(
       (environment) =>
@@ -128,7 +130,7 @@ export const EnvironmentSidebarSection: React.FC<
                       ? "bg-[#333333] text-white"
                       : "text-zinc-300 hover:bg-[#252525] hover:text-zinc-100"
                       }`}
-                    style={{ marginLeft: '16px', marginRight: '16px', paddingLeft: '8px', paddingRight: '16px' }}
+                    style={{ marginLeft: '16px', marginRight: '16px', paddingLeft: '8px', paddingRight: '4px' }}
                   >
                     <span
                       className={`h-2 w-2 shrink-0 rounded-full ${active ? "bg-emerald-400" : "bg-zinc-600"
@@ -153,19 +155,20 @@ export const EnvironmentSidebarSection: React.FC<
                       </span>
                     )}
                     {editingId !== environment.id && (
-                      <div className="flex shrink-0 items-center gap-0.5">
+                      <div className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
                         <button
                           type="button"
                           onClick={(event) => {
                             event.stopPropagation();
-                            startRenaming(environment);
+                            const rect = event.currentTarget.getBoundingClientRect();
+                            setContextMenu({ id: environment.id, x: rect.left, y: rect.bottom + 4 });
                           }}
-                          className="rounded-md p-1.5 text-zinc-500 opacity-0 transition-all hover:bg-[#303030] hover:text-zinc-100 group-hover:opacity-100"
-                          title="Rename environment"
-                          aria-label={`Rename ${environment.name}`}
+                          className="rounded p-1 text-zinc-500 transition-colors hover:bg-[#303030] hover:text-zinc-100"
+                          title="Environment options"
+                          aria-label={`Options for ${environment.name}`}
                         >
                           <svg
-                            className="h-[18px] w-[18px]"
+                            className="h-3.5 w-3.5"
                             fill="none"
                             viewBox="0 0 24 24"
                             stroke="currentColor"
@@ -173,32 +176,8 @@ export const EnvironmentSidebarSection: React.FC<
                             <path
                               strokeLinecap="round"
                               strokeLinejoin="round"
-                              strokeWidth={1.8}
-                              d="M15.232 5.232l3.536 3.536M9 11l6.768-6.768a2.5 2.5 0 013.536 3.536L12.536 14.536 8 16l1-5z"
-                            />
-                          </svg>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void onDelete(environment.id);
-                          }}
-                          className="rounded-md p-1.5 text-zinc-500 opacity-0 transition-all hover:bg-[#303030] hover:text-red-400 group-hover:opacity-100"
-                          title="Delete environment"
-                          aria-label={`Delete ${environment.name}`}
-                        >
-                          <svg
-                            className="h-4 w-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={1.8}
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                              strokeWidth={2}
+                              d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z"
                             />
                           </svg>
                         </button>
@@ -215,6 +194,19 @@ export const EnvironmentSidebarSection: React.FC<
             </ul>
           </OverlayScrollArea>
         )}
+        {contextMenu && (() => {
+          const environment = environments.find((item) => item.id === contextMenu.id);
+          if (!environment) return null;
+          return (
+            <EnvironmentContextMenu
+              x={contextMenu.x}
+              y={contextMenu.y}
+              onClose={() => setContextMenu(null)}
+              onRename={() => startRenaming(environment)}
+              onDelete={() => void onDelete(environment.id)}
+            />
+          );
+        })()}
       </section>
     );
   };

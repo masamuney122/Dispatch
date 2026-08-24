@@ -65,7 +65,7 @@ export const JsonHighlighter: React.FC<JsonHighlighterProps> = ({ code }) => {
       </div>
 
       {/* Code Column */}
-      <div className="flex-1 whitespace-pre pb-4 pl-3">
+      <div className="flex-1 whitespace-pre pb-4 pl-3 pr-12">
         {lines.map((line, idx) => (
           <div key={idx} className="hover:bg-[#2a2a2a] px-2 -mx-2 rounded transition-colors">{highlightLine(line)}</div>
         ))}

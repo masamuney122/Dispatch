@@ -1,5 +1,6 @@
 import type { ApiResponse } from "../../types/api";
 import type { ApiRequest } from "../../types/request";
+import type { GlobalHttpSettings } from "../../types/httpSettings";
 
 function applyAuthentication(request: ApiRequest, headers: Headers): string {
   const auth = request.auth;
@@ -37,6 +38,9 @@ function requestBody(request: ApiRequest, headers: Headers): BodyInit | undefine
   if (request.body_type === "text" && !headers.has("Content-Type")) {
     headers.set("Content-Type", "text/plain;charset=UTF-8");
   }
+  if (request.body_type === "html" && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "text/html;charset=UTF-8");
+  }
   if (request.body_type === "form-data") {
     headers.delete("Content-Type");
     const form = new FormData();
@@ -60,20 +64,80 @@ function requestBody(request: ApiRequest, headers: Headers): BodyInit | undefine
   return request.body;
 }
 
-export async function sendBrowserRequest(request: ApiRequest, signal?: AbortSignal): Promise<ApiResponse> {
+function isTextualContentType(contentType: string | null): boolean {
+  if (!contentType) return false;
+  const mime = contentType.split(";", 1)[0].trim().toLowerCase();
+  return mime.startsWith("text/")
+    || mime.endsWith("+json")
+    || mime.endsWith("+xml")
+    || [
+      "application/json",
+      "application/xml",
+      "application/javascript",
+      "application/x-javascript",
+      "application/graphql",
+      "application/sql",
+      "application/x-www-form-urlencoded",
+      "image/svg+xml",
+    ].includes(mime);
+}
+
+function decodeText(bytes: Uint8Array, contentType: string | null): string {
+  const charset = contentType?.match(/charset\s*=\s*["']?([^;"'\s]+)/i)?.[1] || "utf-8";
+  try {
+    return new TextDecoder(charset).decode(bytes);
+  } catch {
+    return new TextDecoder().decode(bytes);
+  }
+}
+
+function isUtf8(bytes: Uint8Array): boolean {
+  try {
+    new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+}
+
+export async function sendBrowserRequest(
+  request: ApiRequest,
+  settings: GlobalHttpSettings,
+  signal?: AbortSignal,
+): Promise<ApiResponse> {
   const headers = new Headers(request.headers);
   const url = applyAuthentication(request, headers);
   const body = requestBody(request, headers);
   const startedAt = performance.now();
   try {
-    const response = await fetch(url, { method: request.method, headers, body, signal });
-    const responseBody = await response.text();
+    const response = await fetch(url, {
+      method: request.method,
+      headers,
+      body,
+      signal,
+      redirect: settings.follow_redirects ? "follow" : "error",
+      referrerPolicy: settings.remove_referer_on_redirect ? "no-referrer" : undefined,
+    });
+    const contentType = response.headers.get("content-type");
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const decodeAsText = isTextualContentType(contentType) || (!contentType && isUtf8(bytes));
+    const responseBody = decodeAsText ? decodeText(bytes, contentType) : "";
     return {
       status: response.status,
       statusText: response.statusText,
       responseTimeMs: Math.round(performance.now() - startedAt),
-      sizeBytes: new Blob([responseBody]).size,
+      sizeBytes: bytes.byteLength,
       body: responseBody,
+      bodyBase64: !decodeAsText && bytes.byteLength > 0 ? bytesToBase64(bytes) : undefined,
       headers: Object.fromEntries(response.headers.entries()),
     };
   } catch (error) {

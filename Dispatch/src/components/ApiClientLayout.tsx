@@ -15,6 +15,8 @@ import { OpenApiImportDialog } from "./openapi/OpenApiImportDialog";
 import { OpenApiExportDialog } from "./openapi/OpenApiExportDialog";
 import { EnvironmentEditor } from "./environment/EnvironmentEditor";
 import { OverlayScrollArea } from "./common/OverlayScrollArea";
+import { RequestHttpSettingsEditor } from "./settings/HttpSettingsEditor";
+import { GlobalSettingsDialog } from "./settings/GlobalSettingsDialog";
 
 import { useRequestTabs } from "../hooks/useRequestTabs";
 import { useAppData } from "../hooks/useAppData";
@@ -32,11 +34,13 @@ import type { HistoryItem } from "../types/history";
 import type { QueryParamItem } from "../types/tab";
 import type { Collection, SavedRequest } from "../types/collection";
 import type { ArchiveMode } from "../types/workspace";
-import type { OpenApiExportOptions, OpenApiImportOptions, OpenApiImportPreview } from "../types/openapi";
-import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import type { OpenApiExportOptions, OpenApiImportOptions, OpenApiSource } from "../types/openapi";
+import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { exportWorkspaceArchive } from "../services/workspaceService";
 import { flushWorkspaceChanges } from "../services/workspaceLifecycle";
 import { exportCollectionOpenApi, importOpenApi, inspectOpenApi } from "../services/openApiService";
+import { loadGlobalHttpSettings, saveGlobalHttpSettings } from "../services/httpSettingsService";
+import { DEFAULT_HTTP_SETTINGS, type GlobalHttpSettings, type RequestHttpSettings } from "../types/httpSettings";
 
 const RESPONSE_PANEL_DEFAULT_HEIGHT = 320;
 const RESPONSE_PANEL_MIN_HEIGHT = 220;
@@ -64,6 +68,7 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
     activeEnvironmentId: activeEnvironmentTabId,
     setActiveTabId,
     updateActiveTab,
+    clearHttpSettingOverrides,
     handleAddTab,
     handleCloseTab,
     openEnvironmentTab,
@@ -106,13 +111,14 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarMode, setSidebarMode] = useState<"collections" | "history">("collections");
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
-  const [openApiImportDialog, setOpenApiImportDialog] = useState<{
-    path: string;
-    preview: OpenApiImportPreview;
-  } | null>(null);
+  const [openApiImportDialogOpen, setOpenApiImportDialogOpen] = useState(false);
   const [openApiExportCollection, setOpenApiExportCollection] = useState<Collection | null>(null);
   const [openApiSubmitting, setOpenApiSubmitting] = useState(false);
   const [openApiError, setOpenApiError] = useState<string | null>(null);
+  const [globalHttpSettings, setGlobalHttpSettings] = useState<GlobalHttpSettings>(DEFAULT_HTTP_SETTINGS);
+  const [globalSettingsOpen, setGlobalSettingsOpen] = useState(false);
+  const [globalSettingsSaving, setGlobalSettingsSaving] = useState(false);
+  const [globalSettingsError, setGlobalSettingsError] = useState<string | null>(null);
   const [responsePanelHeight, setResponsePanelHeight] = useState(RESPONSE_PANEL_DEFAULT_HEIGHT);
   const [isResizingResponse, setIsResizingResponse] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
@@ -130,6 +136,12 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
   } | null>(null);
   const previousBodyStyleRef = useRef<{ cursor: string; userSelect: string } | null>(null);
   const previousSidebarBodyStyleRef = useRef<{ cursor: string; userSelect: string } | null>(null);
+
+  useEffect(() => {
+    void loadGlobalHttpSettings()
+      .then(setGlobalHttpSettings)
+      .catch((error) => console.error("Global HTTP settings could not be loaded", error));
+  }, []);
 
   // ── Derived Helpers ──
 
@@ -169,6 +181,7 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
         binary: activeTab.binary,
         headers: headersRecord,
         auth: activeTab.auth,
+        settings: activeTab.settings,
       } satisfies ApiRequest,
       queryParams: activeTab.queryParams.map(({ key, value }) => ({
         key,
@@ -284,6 +297,7 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
       body: item.body || "",
       queryParams: parsedParams,
       auth: item.auth || { type: "None" },
+      settings: {},
       selectedHistoryId: item.id,
       selectedSavedRequestId: null,
       isDirty: false,
@@ -303,6 +317,7 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
       queryParams: [],
       headers: Object.entries(item.request.headers).map(([key, value]) => ({ key, value })),
       auth: item.request.auth || { type: "None" },
+      settings: item.request.settings || {},
       response: null,
       error: null,
       selectedHistoryId: null,
@@ -315,6 +330,37 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
   const handleClearHistory = async () => {
     await clearHistoryData();
     updateActiveTab({ selectedHistoryId: null });
+  };
+
+  const handleSaveGlobalSettings = async (settings: GlobalHttpSettings) => {
+    setGlobalSettingsSaving(true);
+    setGlobalSettingsError(null);
+    try {
+      const changedKeys = (Object.keys(settings) as Array<keyof GlobalHttpSettings>)
+        .filter((key) => settings[key] !== globalHttpSettings[key]) as Array<keyof RequestHttpSettings>;
+      const saved = await saveGlobalHttpSettings(settings);
+      setGlobalHttpSettings(saved);
+      clearHttpSettingOverrides(changedKeys);
+      for (const collection of collections) {
+        for (const savedRequest of collection.requests) {
+          if (!changedKeys.some((key) => savedRequest.request.settings?.[key] != null)) continue;
+          const requestSettings = { ...(savedRequest.request.settings || {}) };
+          changedKeys.forEach((key) => delete requestSettings[key]);
+          await updateRequestInCollection(collection.id, savedRequest.id, savedRequest.name, {
+            ...savedRequest.request,
+            settings: requestSettings,
+          });
+        }
+      }
+      if (changedKeys.length > 0) {
+        await refreshCollections();
+      }
+      setGlobalSettingsOpen(false);
+    } catch (error) {
+      setGlobalSettingsError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setGlobalSettingsSaving(false);
+    }
   };
 
   const handleDeleteCollectionWithCleanup = async (id: string) => {
@@ -575,31 +621,21 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
 
   const handleChooseOpenApi = async () => {
     setOpenApiError(null);
-    const selected = await openDialog({
-      multiple: false,
-      directory: false,
-      title: "OpenAPI belgesi seç",
-      filters: [{ name: "OpenAPI", extensions: ["json", "yaml", "yml"] }],
-    });
-    if (typeof selected !== "string") return;
-    try {
-      const preview = await inspectOpenApi(selected);
-      setOpenApiImportDialog({ path: selected, preview });
-    } catch (error) {
-      window.alert(error instanceof Error ? error.message : String(error));
-    }
+    setOpenApiImportDialogOpen(true);
   };
 
-  const handleConfirmOpenApiImport = async (options: OpenApiImportOptions) => {
-    if (!openApiImportDialog) return;
+  const handleConfirmOpenApiImport = async (
+    source: OpenApiSource,
+    options: OpenApiImportOptions
+  ) => {
     setOpenApiSubmitting(true);
     setOpenApiError(null);
     try {
       await flushWorkspaceChanges();
-      const result = await importOpenApi(openApiImportDialog.path, options);
+      const result = await importOpenApi(source, options);
       await Promise.all([refreshCollections(), refreshEnvironments()]);
       setSidebarMode("collections");
-      setOpenApiImportDialog(null);
+      setOpenApiImportDialogOpen(false);
       if (result.warnings.length > 0) {
         window.alert(`OpenAPI içe aktarıldı. ${result.warnings.length} özellik uyarıyla işlendi.`);
       }
@@ -647,6 +683,7 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
         onSearchChange={setSearchQuery}
         onClearHistory={handleClearHistory}
         historyCount={history.length}
+        onOpenSettings={() => { setGlobalSettingsError(null); setGlobalSettingsOpen(true); }}
       />
 
       {/* Main Workspace */}
@@ -816,6 +853,14 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
                         method={activeTab.method}
                       />
                     )}
+                    {activeTab.activeSectionTab === "Settings" && (
+                      <RequestHttpSettingsEditor
+                        value={activeTab.settings}
+                        globalSettings={globalHttpSettings}
+                        platform="desktop"
+                        onChange={(settings) => updateActiveTab({ settings })}
+                      />
+                    )}
                   </div>
 
                   </div>
@@ -868,13 +913,13 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
         />
       )}
 
-      {openApiImportDialog && (
+      {openApiImportDialogOpen && (
         <OpenApiImportDialog
-          fileName={openApiImportDialog.path.split(/[\\/]/).pop() || openApiImportDialog.path}
-          preview={openApiImportDialog.preview}
           submitting={openApiSubmitting}
           error={openApiError}
-          onClose={() => !openApiSubmitting && setOpenApiImportDialog(null)}
+          onInspect={inspectOpenApi}
+          onResetError={() => setOpenApiError(null)}
+          onClose={() => !openApiSubmitting && setOpenApiImportDialogOpen(false)}
           onConfirm={handleConfirmOpenApiImport}
         />
       )}
@@ -886,6 +931,17 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
           error={openApiError}
           onClose={() => !openApiSubmitting && setOpenApiExportCollection(null)}
           onConfirm={handleConfirmOpenApiExport}
+        />
+      )}
+
+      {globalSettingsOpen && (
+        <GlobalSettingsDialog
+          settings={globalHttpSettings}
+          platform="desktop"
+          saving={globalSettingsSaving}
+          error={globalSettingsError}
+          onClose={() => !globalSettingsSaving && setGlobalSettingsOpen(false)}
+          onSave={handleSaveGlobalSettings}
         />
       )}
     </div>

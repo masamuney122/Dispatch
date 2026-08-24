@@ -5,8 +5,8 @@ use tauri::Manager;
 
 use crate::models::environment::AppState;
 use crate::models::workspace::{
-    EnvironmentsDocument, RecentWorkspace, WorkspaceRuntimeState, WorkspaceSession,
-    ENVIRONMENTS_FILE,
+    EnvironmentsDocument, GlobalHttpSettings, RecentWorkspace, WorkspaceRuntimeState,
+    WorkspaceSession, ENVIRONMENTS_FILE,
 };
 use crate::services::storage_service::read_json;
 use crate::services::workspace_service;
@@ -70,6 +70,35 @@ pub fn list_recent_workspaces(
         .settings
         .recent_workspaces
         .clone())
+}
+
+#[tauri::command]
+pub fn get_http_settings(
+    runtime: tauri::State<'_, Mutex<WorkspaceRuntimeState>>,
+) -> Result<GlobalHttpSettings, String> {
+    Ok(runtime
+        .lock()
+        .map_err(|error| error.to_string())?
+        .settings
+        .http
+        .clone())
+}
+
+#[tauri::command]
+pub fn update_http_settings(
+    app_handle: tauri::AppHandle,
+    runtime: tauri::State<'_, Mutex<WorkspaceRuntimeState>>,
+    mut settings: GlobalHttpSettings,
+) -> Result<GlobalHttpSettings, String> {
+    settings.max_redirects = settings.max_redirects.clamp(1, 100);
+    let app_data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Failed to get app data directory: {error}"))?;
+    let mut runtime = runtime.lock().map_err(|error| error.to_string())?;
+    runtime.settings.http = settings.clone();
+    workspace_service::save_settings(&app_data_dir, &runtime.settings)?;
+    Ok(settings)
 }
 
 pub fn activate_workspace(

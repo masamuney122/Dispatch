@@ -2,6 +2,11 @@ import type { Collection } from "./collection";
 import type { Environment } from "./environment";
 
 export type OpenApiExportFormat = "json" | "yaml";
+export type OpenApiSource =
+  | { kind: "file"; path: string }
+  | { kind: "text"; content: string };
+export type OpenApiRequestNaming = "fallback" | "path" | "url";
+export type OpenApiFolderOrganization = "tags" | "path";
 
 export interface OpenApiWarning {
   code: string;
@@ -14,6 +19,8 @@ export interface OpenApiImportPreview {
   specification_version: string;
   endpoint_count: number;
   folder_count: number;
+  tag_folder_count: number;
+  path_folder_count: number;
   servers: string[];
   security_schemes: string[];
   warnings: OpenApiWarning[];
@@ -24,6 +31,8 @@ export interface OpenApiImportOptions {
   selected_server: string | null;
   create_environment: boolean;
   environment_name: string | null;
+  request_naming: OpenApiRequestNaming;
+  folder_organization: OpenApiFolderOrganization;
 }
 
 export interface OpenApiImportResult {

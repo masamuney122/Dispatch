@@ -1,8 +1,7 @@
 import { useMemo, useState } from "react";
 import type { ApiResponse } from "../../types/response";
-import { JsonHighlighter } from "../response/JsonHighlighter";
-import { JsonPreviewTable } from "../response/JsonPreviewTable";
-import { STATUS_TEXT, formatSize, getHeader, prettyJson, getStatusStyle } from "../../utils/responseUtils";
+import { ResponseBodyView, type ResponseBodyMode } from "../response/ResponseBodyView";
+import { STATUS_TEXT, formatSize, getHeader, getResponseBodyKind, getStatusStyle, responseKindLabel } from "../../utils/responseUtils";
 import { OverlayScrollArea } from "../common/OverlayScrollArea";
 
 interface ResponsePlaceholderProps {
@@ -12,24 +11,6 @@ interface ResponsePlaceholderProps {
 }
 
 type ResponseSection = "body" | "cookies" | "headers";
-type BodyMode = "json" | "preview";
-
-const ErrorStateIcon = () => (
-  <div
-    className="flex items-center justify-center rounded-full border border-[#513536] bg-[#2a2021] text-rose-400"
-    style={{
-      width: "52px",
-      height: "52px",
-      boxShadow: "0 8px 24px rgba(0, 0, 0, 0.18)",
-    }}
-  >
-    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M10.3 3.9L2.4 18a2 2 0 001.75 3h15.7a2 2 0 001.75-3L13.7 3.9a2 2 0 00-3.4 0z" />
-    </svg>
-  </div>
-);
-
 const getErrorHelpText = (error: string) => {
   const normalized = error.toLowerCase();
   if (normalized.includes("refused") || normalized.includes("error sending request")) {
@@ -49,20 +30,34 @@ const getErrorHelpText = (error: string) => {
 
 export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ response, loading, error }) => {
   const [section, setSection] = useState<ResponseSection>("body");
-  const [bodyMode, setBodyMode] = useState<BodyMode>("json");
+  const [bodyMode, setBodyMode] = useState<ResponseBodyMode>("pretty");
 
   const responseData = useMemo(() => {
     if (!response) return null;
     const contentType = getHeader(response.headers, "content-type");
-    const formatted = prettyJson(response.body);
+    const kind = getResponseBodyKind(contentType, response.body, response.body_base64);
     return {
       contentType,
-      formattedBody: formatted.value,
-      isJson: formatted.isJson,
-      size: new TextEncoder().encode(response.body).byteLength,
+      kind,
+      size: response.body_size ?? new TextEncoder().encode(response.body).byteLength,
       headers: Object.entries(response.headers).sort(([left], [right]) => left.localeCompare(right)),
     };
   }, [response]);
+
+  const bodyModes = useMemo<Array<{ key: ResponseBodyMode; label: string }>>(() => {
+    if (!responseData || responseData.kind === "empty") return [];
+    if (["image", "audio", "video", "pdf", "binary"].includes(responseData.kind)) {
+      return [{ key: "pretty", label: "Preview" }, { key: "raw", label: "Raw" }];
+    }
+    return [
+      { key: "pretty", label: responseKindLabel(responseData.kind) },
+      { key: "raw", label: "Raw" },
+      { key: "preview", label: "Preview" },
+    ];
+  }, [responseData]);
+  const effectiveBodyMode = bodyModes.some((item) => item.key === bodyMode)
+    ? bodyMode
+    : bodyModes[0]?.key || "pretty";
 
   const sectionTabs: { key: ResponseSection; label: string; suffix?: React.ReactNode }[] = [
     { key: "body", label: "Body" },
@@ -136,10 +131,8 @@ export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ respon
               className="flex w-full flex-col items-center text-center"
               style={{ maxWidth: "720px" }}
             >
-              <ErrorStateIcon />
               <h3
                 className="text-[18px] font-semibold text-zinc-100"
-                style={{ marginTop: "18px" }}
               >
                 Could not send request
               </h3>
@@ -201,39 +194,35 @@ export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ respon
                   paddingBottom: "6px",
                 }}
               >
-                <button
-                  onClick={() => setBodyMode("json")}
-                  className={`flex items-center border-b-2 px-3 pb-0.5 pt-0 text-xs leading-none transition-colors ${bodyMode === "json"
-                    ? "border-[#ff6c37] text-white font-bold"
-                    : "border-transparent text-zinc-400 hover:text-zinc-200"
-                    }`}
-                >
-                  <span className="font-mono text-xs">{`{}`}</span>
-                  <span>JSON</span>
-                  <svg className="ml-1.5 h-3.5 w-3.5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-
-                <button
-                  onClick={() => setBodyMode("preview")}
-                  className={`flex items-center border-b-2 px-3 pb-0.5 pt-0 text-xs leading-none transition-colors ${bodyMode === "preview"
-                    ? "border-[#ff6c37] text-white font-bold"
-                    : "border-transparent text-zinc-400 hover:text-zinc-200"
-                    }`}
-                >
-                  <span>Preview</span>
-                </button>
+                {bodyModes.map((mode) => (
+                  <button
+                    key={mode.key}
+                    onClick={() => setBodyMode(mode.key)}
+                    className={`flex items-center border-b-2 px-3 pb-0.5 pt-0 text-xs leading-none transition-colors ${effectiveBodyMode === mode.key
+                      ? "border-[#ff6c37] text-white font-bold"
+                      : "border-transparent text-zinc-400 hover:text-zinc-200"
+                      }`}
+                  >
+                    {mode.key === "pretty" && responseData.kind === "json" && <span className="mr-1 font-mono text-xs">{`{}`}</span>}
+                    <span>{mode.label}</span>
+                  </button>
+                ))}
 
               </div>
 
               {/* View Content */}
               <div
                 className="flex flex-1 min-h-0 overflow-hidden"
-                style={bodyMode === "json" ? { paddingLeft: "16px", paddingRight: "48px" } : undefined}
+                style={effectiveBodyMode !== "preview" ? { paddingLeft: "16px" } : undefined}
               >
-                {bodyMode === "json" && <JsonHighlighter code={responseData.formattedBody} />}
-                {bodyMode === "preview" && <JsonPreviewTable body={response.body} contentType={responseData.contentType} />}
+                <ResponseBodyView
+                  mode={effectiveBodyMode}
+                  kind={responseData.kind}
+                  body={response.body}
+                  bodyBase64={response.body_base64}
+                  contentType={responseData.contentType}
+                  size={responseData.size}
+                />
               </div>
             </>
           )}

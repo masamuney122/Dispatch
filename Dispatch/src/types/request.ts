@@ -1,4 +1,5 @@
 import type { AuthConfig } from "./auth";
+import type { RequestHttpSettings } from "./httpSettings";
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
 
@@ -8,6 +9,7 @@ export type RequestBodyType =
   | "none"
   | "json"
   | "text"
+  | "html"
   | "xml"
   | "form-data"
   | "x-www-form-urlencoded"
@@ -33,4 +35,5 @@ export interface ApiRequest {
   binary?: BinaryBody;
   headers: Record<string, string>;
   auth?: AuthConfig;
+  settings?: RequestHttpSettings;
 }

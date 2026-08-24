@@ -4,6 +4,30 @@ use crate::models::collection::Collection;
 use crate::models::environment::Environment;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum OpenApiSource {
+    File { path: String },
+    Text { content: String },
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OpenApiRequestNaming {
+    #[default]
+    Fallback,
+    Path,
+    Url,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OpenApiFolderOrganization {
+    #[default]
+    Tags,
+    Path,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum OpenApiExportFormat {
     Json,
@@ -23,17 +47,23 @@ pub struct OpenApiImportPreview {
     pub specification_version: String,
     pub endpoint_count: usize,
     pub folder_count: usize,
+    pub tag_folder_count: usize,
+    pub path_folder_count: usize,
     pub servers: Vec<String>,
     pub security_schemes: Vec<String>,
     pub warnings: Vec<OpenApiWarning>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct OpenApiImportOptions {
     pub collection_name: String,
     pub selected_server: Option<String>,
     pub create_environment: bool,
     pub environment_name: Option<String>,
+    #[serde(default)]
+    pub request_naming: OpenApiRequestNaming,
+    #[serde(default)]
+    pub folder_organization: OpenApiFolderOrganization,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

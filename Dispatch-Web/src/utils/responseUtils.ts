@@ -25,6 +25,67 @@ export const prettyJson = (body: string): { value: string; isJson: boolean } => 
   }
 };
 
+export type ResponseBodyKind = "empty" | "json" | "html" | "xml" | "text" | "image" | "audio" | "video" | "pdf" | "binary";
+
+export const getResponseBodyKind = (
+  contentType: string | undefined,
+  body: string,
+  bodyBase64?: string | null,
+): ResponseBodyKind => {
+  if (!body && !bodyBase64) return "empty";
+  const mime = contentType?.split(";", 1)[0].trim().toLowerCase() || "";
+  if (mime.includes("json") || (!mime && prettyJson(body).isJson)) return "json";
+  if (mime === "text/html" || mime === "application/xhtml+xml") return "html";
+  if (mime.includes("xml")) return "xml";
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("audio/")) return "audio";
+  if (mime.startsWith("video/")) return "video";
+  if (mime === "application/pdf") return "pdf";
+  if (bodyBase64) return "binary";
+  return "text";
+};
+
+export const responseKindLabel = (kind: ResponseBodyKind): string => ({
+  empty: "Body",
+  json: "JSON",
+  html: "HTML",
+  xml: "XML",
+  text: "Text",
+  image: "Image",
+  audio: "Audio",
+  video: "Video",
+  pdf: "PDF",
+  binary: "Binary",
+}[kind]);
+
+export const responseDataUrl = (
+  contentType: string | undefined,
+  body: string,
+  bodyBase64?: string | null,
+): string | null => {
+  const mime = contentType?.split(";", 1)[0].trim() || "application/octet-stream";
+  if (bodyBase64) return `data:${mime};base64,${bodyBase64}`;
+  if (mime.toLowerCase() === "image/svg+xml" && body) {
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(body)}`;
+  }
+  return null;
+};
+
+export const binaryHexPreview = (bodyBase64?: string | null, limit = 512): string => {
+  if (!bodyBase64) return "";
+  const binary = atob(bodyBase64);
+  const length = Math.min(binary.length, limit);
+  const rows: string[] = [];
+  for (let offset = 0; offset < length; offset += 16) {
+    const values = Array.from(binary.slice(offset, Math.min(offset + 16, length)))
+      .map((character) => character.charCodeAt(0).toString(16).padStart(2, "0"))
+      .join(" ");
+    rows.push(`${offset.toString(16).padStart(8, "0")}  ${values}`);
+  }
+  if (binary.length > limit) rows.push(`… ${binary.length - limit} more bytes`);
+  return rows.join("\n");
+};
+
 export const getStatusStyle = (status: number): string => {
   if (status >= 200 && status < 300) return "text-emerald-400";
   if (status >= 300 && status < 400) return "text-sky-400";

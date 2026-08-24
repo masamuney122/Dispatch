@@ -635,15 +635,15 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
 
         {/* ── Collections mode ──────────────────────────────────────────────── */}
         {mode === "collections" && (
-          <div className="flex-1" style={{ padding: '12px' }}>
+          <div className="flex-1" style={{ padding: '6px' }}>
             {/* Section header */}
-            <div className="flex items-center justify-between text-zinc-300 font-semibold text-[11px] uppercase tracking-wider select-none px-1 pb-0 mb-[1px]">
+            <div className="flex items-center justify-between text-[11px] font-bold tracking-wider text-zinc-300 select-none pb-0 mb-[1px]">
               <div
                 onClick={() => setCollectionsHeaderOpen(!collectionsHeaderOpen)}
-                className="flex items-center gap-1.5 cursor-pointer hover:text-white"
+                className="flex items-center gap-2 cursor-pointer hover:text-white"
               >
                 <svg
-                  className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${collectionsHeaderOpen ? "rotate-90" : ""}`}
+                  className={`h-4 w-4 text-zinc-400 transition-transform ${collectionsHeaderOpen ? "rotate-90" : ""}`}
                   fill="none" viewBox="0 0 24 24" stroke="currentColor"
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
@@ -662,7 +662,7 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
             </div>
 
             {collectionsHeaderOpen && (
-              <div className="pl-4 mt-1">
+              <div className="pl-1 mt-0.5">
                 {filteredCollections.length === 0 ? (
                   <div className="text-center text-zinc-500 text-xs py-6">
                     <p>No collections found.</p>
@@ -681,17 +681,17 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
                     const allIds = getAllNodeIds(treeNodes);
 
                     return (
-                      <div key={collection.id} className="mb-1">
+                      <div key={collection.id} className="mb-0.5">
                         {/* Collection header row */}
                         <div
                           onClick={(e) => {
                             setSelectedCollectionId(collection.id);
                             toggleCollectionOpen(collection.id, e);
                           }}
-                          className={`group flex min-h-[28px] items-center gap-1.5 rounded-md cursor-pointer transition-colors ${isSelected
+                          className={`group flex min-h-[24px] items-center gap-1 rounded-md cursor-pointer transition-colors ${isSelected
                             ? "bg-[#333333] text-white"
                             : "text-zinc-300 hover:bg-[#252525]"
-                            } px-1.5`}
+                            } px-1`}
                         >
                           <svg
                             className={`w-3.5 h-3.5 text-zinc-400 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
@@ -799,7 +799,7 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
                               strategy={verticalListSortingStrategy}
                             >
                               <div
-                                className="border-l border-[#2e2e2e] ml-[22px] pl-2 mt-1 mb-1"
+                                className="border-l border-[#2e2e2e] ml-[10px] pl-0.5 mt-0.5 mb-0.5"
                               >
                                 {/* Inline root-folder creation */}
                                 {creatingFolderInCollectionId === collection.id && (
@@ -952,7 +952,7 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
                                   <MethodBadge method={item.method} compact />
                                   <span className="truncate font-sans text-[11px]">{item.url}</span>
                                 </div>
-                                <div className={`${isSel ? "opacity-100" : "opacity-0 group-hover:opacity-100"} flex items-center gap-0.5 transition-opacity bg-[#222222] px-1 rounded relative`}>
+                                <div className={`${isSel ? "flex" : "hidden group-hover:flex"} shrink-0 items-center gap-0.5`}>
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -962,11 +962,11 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
                                           : { id: item.id, x: e.clientX, y: e.clientY }
                                       );
                                     }}
-                                    className="rounded-md p-1 text-zinc-400 hover:bg-[#303030] hover:text-white"
+                                    className="rounded p-1 text-zinc-500 hover:text-zinc-100 hover:bg-[#303030] transition-colors"
                                     title="Options"
                                   >
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />
                                     </svg>
                                   </button>
                                 </div>

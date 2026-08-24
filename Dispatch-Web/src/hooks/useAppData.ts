@@ -130,6 +130,11 @@ export function useAppData() {
     setCollections(updated);
   };
 
+  const refreshEnvironments = async () => {
+    const updated = await listEnvironments();
+    setEnvironments(updated);
+  };
+
   // ── Folder handlers ───────────────────────────────────────────────────────
 
   const handleCreateFolder = async (
@@ -352,6 +357,7 @@ export function useAppData() {
     handleRenameCollection,
     handleDeleteCollection,
     refreshCollections,
+    refreshEnvironments,
     handleCreateFolder,
     handleRenameFolder,
     handleDeleteFolder,

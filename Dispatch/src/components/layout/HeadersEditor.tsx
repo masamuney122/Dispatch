@@ -87,6 +87,7 @@ export const HeadersEditor: React.FC<HeadersEditorProps> = ({ headers = [], onCh
     if (bodyType === "json") contentType = "application/json";
     else if (bodyType === "xml") contentType = "application/xml";
     else if (bodyType === "text") contentType = "text/plain";
+    else if (bodyType === "html") contentType = "text/html";
     else if (bodyType === "x-www-form-urlencoded") contentType = "application/x-www-form-urlencoded";
     else if (bodyType === "form-data") contentType = "multipart/form-data";
     
