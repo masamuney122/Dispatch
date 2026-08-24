@@ -1,9 +1,9 @@
-# MiniPostman - Project Context for AI Assistants
+# Dispatch - Project Context for AI Assistants
 
-This document is intended to provide a comprehensive overview of the **MiniPostman** project to any AI coding assistant to help them understand the architecture, tech stack, and core features before contributing to the codebase.
+This document is intended to provide a comprehensive overview of the **Dispatch** project to any AI coding assistant to help them understand the architecture, tech stack, and core features before contributing to the codebase.
 
 ## 🚀 Overview
-MiniPostman is a lightweight, cross-platform desktop API client. It is designed as a streamlined alternative to tools like Postman or Insomnia. It allows developers to construct, send, and manage HTTP requests, organize them into collections, and use environment variables.
+Dispatch is a lightweight, cross-platform desktop API client. It is designed as a streamlined alternative to tools like Postman or Insomnia. It allows developers to construct, send, and manage HTTP requests, organize them into collections, and use environment variables.
 
 ## 🛠️ Technology Stack
 - **Application Framework**: [Tauri v2](https://v2.tauri.app/) (Builds smaller, faster desktop apps)
@@ -69,15 +69,15 @@ The project is strictly divided into two parts: the React frontend (`src/`) and 
 
 ## 🧪 Automated & Manual E2E Testing Strategy (Spring Boot Backend)
 
-To ensure MiniPostman works correctly and robustly, there is a **companion Spring Boot test backend** situated next to this project. This Spring Boot application serves as a dummy target server for end-to-end (E2E) testing of MiniPostman's features.
+To ensure Dispatch works correctly and robustly, there is a **companion Spring Boot test backend** situated next to this project. This Spring Boot application serves as a dummy target server for end-to-end (E2E) testing of Dispatch's features.
 
 **Critical Agent Instructions for Testing & Feature Development:**
 
-1. **The Spring Boot Test Environment:** When asked to test a MiniPostman feature (e.g., OAuth2, File Uploads, query parameters, complex headers), you must first ensure that the corresponding endpoints and configurations exist in the Spring Boot backend. 
+1. **The Spring Boot Test Environment:** When asked to test a Dispatch feature (e.g., OAuth2, File Uploads, query parameters, complex headers), you must first ensure that the corresponding endpoints and configurations exist in the Spring Boot backend.
 2. **Keep the Spring Backend Clean & Organized:** You are responsible for keeping the Spring test environment tidy. Do not dump all endpoints into one file. Create separate, logically grouped controllers (e.g., `AuthController`, `FileUploadController`, `MockDataController`) and modular configurations (e.g., `SecurityConfig`).
 3. **End-to-End Testing Workflow:** 
    - **Step 1:** Implement or fix the mock endpoint in the Spring Boot project to simulate the specific scenario (e.g., a mock token issuer for OAuth2 or an endpoint that echoes headers).
    - **Step 2:** Start the Spring Boot application.
-   - **Step 3:** Start MiniPostman (`npm run tauri dev`).
-   - **Step 4:** Use MiniPostman to send requests to the local Spring Boot backend and verify that the React UI, Rust logic, and `reqwest` client handle the request/response cycle correctly.
-4. **Synchronized Development:** When adding a new feature to MiniPostman (e.g., a new Authentication type or a new Body format), you must simultaneously develop the corresponding test infrastructure in the Spring Boot project so that the new feature can be verified immediately.
+   - **Step 3:** Start Dispatch (`npm run tauri dev`).
+   - **Step 4:** Use Dispatch to send requests to the local Spring Boot backend and verify that the React UI, Rust logic, and `reqwest` client handle the request/response cycle correctly.
+4. **Synchronized Development:** When adding a new feature to Dispatch (e.g., a new Authentication type or a new Body format), you must simultaneously develop the corresponding test infrastructure in the Spring Boot project so that the new feature can be verified immediately.

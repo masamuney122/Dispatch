@@ -97,7 +97,7 @@ export const HeadersEditor: React.FC<HeadersEditorProps> = ({ headers = [], onCh
 
     generated.push({ key: "Content-Length", value: "<calculated when request is sent>", description: "Calculated automatically when sending" });
     generated.push({ key: "Host", value: "<calculated when request is sent>", description: "Calculated automatically when sending" });
-    generated.push({ key: "User-Agent", value: "MiniPostman/2.0", description: "Default User-Agent" });
+    generated.push({ key: "User-Agent", value: "Dispatch/2.0", description: "Default User-Agent" });
     generated.push({ key: "Accept", value: "*/*", description: "Default Accept header" });
     generated.push({ key: "Accept-Encoding", value: "gzip, deflate, br", description: "Default Accept-Encoding" });
     generated.push({ key: "Connection", value: "keep-alive", description: "Default Connection type" });

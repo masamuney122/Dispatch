@@ -415,7 +415,7 @@ mod tests {
         let mut form_request = request(url, "POST", RequestBodyType::XWwwFormUrlencoded);
         form_request.form_fields = vec![BodyField {
             key: "name".into(),
-            value: "Mini Postman".into(),
+            value: "Dispatch".into(),
         }];
         tauri::async_runtime::block_on(send_request(form_request)).expect("send form request");
         let form_message = received.recv().expect("captured form request");
@@ -465,13 +465,13 @@ mod tests {
         let mut multipart_request = request(url, "POST", RequestBodyType::FormData);
         multipart_request.form_fields = vec![BodyField {
             key: "title".into(),
-            value: "MiniPostman".into(),
+            value: "Dispatch".into(),
         }];
         tauri::async_runtime::block_on(send_request(multipart_request))
             .expect("send multipart request");
         let multipart_message = received.recv().expect("captured multipart request");
         assert!(multipart_message.contains("content-type: multipart/form-data; boundary="));
         assert!(multipart_message.contains("name=\"title\""));
-        assert!(multipart_message.contains("MiniPostman"));
+        assert!(multipart_message.contains("Dispatch"));
     }
 }

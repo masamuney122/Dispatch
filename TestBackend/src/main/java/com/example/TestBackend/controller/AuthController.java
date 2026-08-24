@@ -22,8 +22,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class AuthController {
 
-    public static final String CLIENT_ID = "minipostman-client";
-    public static final String CLIENT_SECRET = "minipostman-secret";
+    public static final String CLIENT_ID = "dispatch-client";
+    public static final String CLIENT_SECRET = "dispatch-secret";
     public static final String RESOURCE_USERNAME = "testuser";
     public static final String RESOURCE_PASSWORD = "testpass";
 

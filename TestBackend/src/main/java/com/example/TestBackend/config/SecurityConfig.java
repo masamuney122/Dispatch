@@ -43,7 +43,7 @@ public class SecurityConfig {
         private static final String BASIC_USERNAME = "mini";
         private static final String BASIC_PASSWORD = "postman";
         private static final String BEARER_TOKEN = "bearer-test-token";
-        private static final String API_KEY = "minipostman-api-key";
+        private static final String API_KEY = "dispatch-api-key";
 
         private final MockTokenService tokenService;
         private final ObjectMapper objectMapper;
