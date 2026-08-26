@@ -1,6 +1,11 @@
 import { useState, type FormEvent, type ReactNode } from "react";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { inspectWorkspaceArchive } from "../../services/workspaceService";
+import {
+  chooseImportDestination as pickImportDestination,
+  chooseWorkspaceArchive,
+  chooseWorkspaceDirectory as pickWorkspaceDirectory,
+  inspectWorkspaceArchive,
+  supportsWorkspaceArchive,
+} from "../../services/workspaceService";
 import type { ArchivePreview, RecentWorkspace } from "../../types/workspace";
 
 type LauncherMode = "open" | "create" | "import";
@@ -28,10 +33,13 @@ export function WorkspaceLauncher({
 }: WorkspaceLauncherProps) {
   const [mode, setMode] = useState<LauncherMode>("open");
   const [path, setPath] = useState("");
+  const [pathToken, setPathToken] = useState("");
   const [name, setName] = useState("");
   const [archivePath, setArchivePath] = useState("");
+  const [archiveToken, setArchiveToken] = useState("");
   const [archivePreview, setArchivePreview] = useState<ArchivePreview | null>(null);
   const [destinationParent, setDestinationParent] = useState("");
+  const [destinationToken, setDestinationToken] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const selectMode = (nextMode: LauncherMode) => {
@@ -41,8 +49,7 @@ export function WorkspaceLauncher({
 
   const submitWorkspace = async (event: FormEvent) => {
     event.preventDefault();
-    const normalizedPath = path.trim();
-    if (!normalizedPath) {
+    if (!pathToken) {
       onError("Workspace klasörünü seçmelisin.");
       return;
     }
@@ -54,8 +61,8 @@ export function WorkspaceLauncher({
     setSubmitting(true);
     onError(null);
     try {
-      if (mode === "create") await onCreate(normalizedPath, name.trim());
-      else await onOpen(normalizedPath);
+      if (mode === "create") await onCreate(pathToken, name.trim());
+      else await onOpen(pathToken);
     } catch (reason) {
       onError(toMessage(reason));
     } finally {
@@ -67,7 +74,7 @@ export function WorkspaceLauncher({
     setSubmitting(true);
     onError(null);
     try {
-      await onOpen(recent.path);
+      await onOpen(recent.token ?? recent.path);
     } catch (reason) {
       onError(toMessage(reason));
     } finally {
@@ -78,15 +85,11 @@ export function WorkspaceLauncher({
   const chooseWorkspaceDirectory = async () => {
     onError(null);
     try {
-      const selected = await openDialog({
-        directory: true,
-        multiple: false,
-        title:
-          mode === "create"
-            ? "Boş workspace klasörünü seç"
-            : "Dispatch workspace klasörünü seç",
-      });
-      if (typeof selected === "string") setPath(selected);
+      const selected = await pickWorkspaceDirectory(mode === "create" ? "create" : "open");
+      if (selected) {
+        setPath(selected.label);
+        setPathToken(selected.token);
+      }
     } catch (reason) {
       onError(toMessage(reason));
     }
@@ -95,17 +98,13 @@ export function WorkspaceLauncher({
   const chooseArchive = async () => {
     onError(null);
     try {
-      const selected = await openDialog({
-        multiple: false,
-        directory: false,
-        title: "Dispatch arşivini seç",
-        filters: [{ name: "Dispatch Workspace", extensions: ["dispatch"] }],
-      });
-      if (typeof selected !== "string") return;
+      const selected = await chooseWorkspaceArchive();
+      if (!selected) return;
 
-      setArchivePath(selected);
+      setArchivePath(selected.label);
+      setArchiveToken(selected.token);
       setArchivePreview(null);
-      const preview = await inspectWorkspaceArchive(selected);
+      const preview = await inspectWorkspaceArchive(selected.token);
       setArchivePreview(preview);
     } catch (reason) {
       onError(toMessage(reason));
@@ -115,23 +114,22 @@ export function WorkspaceLauncher({
   const chooseImportDestination = async () => {
     onError(null);
     try {
-      const selected = await openDialog({
-        multiple: false,
-        directory: true,
-        title: "Workspace'in oluşturulacağı üst klasörü seç",
-      });
-      if (typeof selected === "string") setDestinationParent(selected);
+      const selected = await pickImportDestination();
+      if (selected) {
+        setDestinationParent(selected.label);
+        setDestinationToken(selected.token);
+      }
     } catch (reason) {
       onError(toMessage(reason));
     }
   };
 
   const importArchive = async () => {
-    if (!archivePath || !archivePreview) {
+    if (!archiveToken || !archivePreview) {
       onError("Önce geçerli bir .dispatch dosyası seçmelisin.");
       return;
     }
-    if (!destinationParent) {
+    if (!destinationToken) {
       onError("Workspace'in oluşturulacağı klasörü seçmelisin.");
       return;
     }
@@ -140,8 +138,8 @@ export function WorkspaceLauncher({
     onError(null);
     try {
       await onImportArchive(
-        archivePath,
-        destinationParent,
+        archiveToken,
+        destinationToken,
         archivePreview.workspace_name
       );
     } catch (reason) {
@@ -184,12 +182,14 @@ export function WorkspaceLauncher({
             >
               Yeni workspace
             </ModeButton>
-            <ModeButton
-              active={mode === "import"}
-              onClick={() => selectMode("import")}
-            >
-              .dispatch içe aktar
-            </ModeButton>
+            {supportsWorkspaceArchive && (
+              <ModeButton
+                active={mode === "import"}
+                onClick={() => selectMode("import")}
+              >
+                .dispatch içe aktar
+              </ModeButton>
+            )}
           </nav>
 
           <div className="min-h-[330px] px-12 py-7 sm:px-16">
@@ -198,7 +198,10 @@ export function WorkspaceLauncher({
                 path={path}
                 submitting={submitting}
                 recentWorkspaces={recentWorkspaces}
-                onPathChange={setPath}
+                onPathChange={(value) => {
+                  setPath(value);
+                  setPathToken("");
+                }}
                 onChooseDirectory={chooseWorkspaceDirectory}
                 onSubmit={submitWorkspace}
                 onOpenRecent={openRecent}
@@ -211,7 +214,10 @@ export function WorkspaceLauncher({
                 path={path}
                 submitting={submitting}
                 onNameChange={setName}
-                onPathChange={setPath}
+                onPathChange={(value) => {
+                  setPath(value);
+                  setPathToken("");
+                }}
                 onChooseDirectory={chooseWorkspaceDirectory}
                 onSubmit={submitWorkspace}
               />

@@ -1,6 +1,7 @@
 pub mod archive;
 pub mod auth;
 pub mod collection;
+pub mod cookie;
 pub mod environment;
 pub mod history;
 pub mod openapi;

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { chooseOpenApiFile } from "../../services/openApiService";
 import type {
   OpenApiFolderOrganization,
   OpenApiImportOptions,
@@ -26,7 +26,7 @@ export function OpenApiImportDialog({
   onConfirm,
 }: OpenApiImportDialogProps) {
   const [sourceMode, setSourceMode] = useState<"file" | "text">("file");
-  const [filePath, setFilePath] = useState("");
+  const [fileSource, setFileSource] = useState<OpenApiSource | null>(null);
   const [content, setContent] = useState("");
   const [preview, setPreview] = useState<OpenApiImportPreview | null>(null);
   const [inspecting, setInspecting] = useState(false);
@@ -47,20 +47,15 @@ export function OpenApiImportDialog({
 
   const sourceForCurrentMode = (): OpenApiSource | null => {
     if (sourceMode === "file") {
-      return filePath ? { kind: "file", path: filePath } : null;
+      return fileSource;
     }
     return content.trim() ? { kind: "text", content } : null;
   };
 
   const handleChooseFile = async () => {
-    const selected = await openDialog({
-      multiple: false,
-      directory: false,
-      title: "OpenAPI belgesi seç",
-      filters: [{ name: "OpenAPI", extensions: ["json", "yaml", "yml"] }],
-    });
-    if (typeof selected !== "string") return;
-    setFilePath(selected);
+    const selected = await chooseOpenApiFile();
+    if (!selected) return;
+    setFileSource(selected);
     invalidatePreview();
   };
 
@@ -125,7 +120,7 @@ export function OpenApiImportDialog({
           <div className="flex gap-2">
             <div className={`${inputClass} flex min-w-0 flex-1 items-center font-mono text-zinc-400`}>
               <span className="truncate">
-                {filePath || "Henüz bir OpenAPI dosyası seçilmedi"}
+                {fileSource?.kind === "file" ? fileSource.name : "Henüz bir OpenAPI dosyası seçilmedi"}
               </span>
             </div>
             <SecondaryButton onClick={() => void handleChooseFile()} disabled={disabled}>

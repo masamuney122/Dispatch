@@ -92,7 +92,7 @@ export const EnvironmentEditor: React.FC<EnvironmentEditorProps> = ({
         paddingBottom: "32px",
       }}
     >
-      <div className="mb-6 pb-4">
+      <div className="mb-6">
         <div className="flex min-h-9 items-center gap-3.5">
           <span className="flex h-8 w-8 items-center justify-center rounded-md border border-[#3a3a3a] bg-[#242424] text-emerald-400">
             <svg
@@ -155,7 +155,7 @@ export const EnvironmentEditor: React.FC<EnvironmentEditorProps> = ({
         </div>
       </div>
 
-      <div style={{ marginTop: "8px" }}>
+      <div>
         <EnvironmentVariablesTable
           variables={draftVariables}
           onChange={handleVariablesChange}

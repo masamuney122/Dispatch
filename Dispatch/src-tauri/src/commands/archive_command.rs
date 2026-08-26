@@ -6,6 +6,7 @@ use crate::models::archive::{ArchiveMode, ArchivePreview};
 use crate::models::environment::AppState;
 use crate::models::workspace::{WorkspaceRuntimeState, WorkspaceSession};
 use crate::services::archive_service;
+use crate::services::cookie_service::CookieRuntimeState;
 
 #[tauri::command]
 pub fn export_workspace_archive(
@@ -32,6 +33,7 @@ pub fn import_workspace_archive(
     app_handle: tauri::AppHandle,
     runtime: tauri::State<'_, Mutex<WorkspaceRuntimeState>>,
     environment_state: tauri::State<'_, Mutex<AppState>>,
+    cookie_state: tauri::State<'_, Mutex<CookieRuntimeState>>,
     archive_path: String,
     destination_parent: String,
     workspace_name: Option<String>,
@@ -49,7 +51,13 @@ pub fn import_workspace_archive(
         &destination,
         Some(requested_name),
     )?;
-    activate_workspace(&app_handle, &runtime, &environment_state, session)
+    activate_workspace(
+        &app_handle,
+        &runtime,
+        &environment_state,
+        &cookie_state,
+        session,
+    )
 }
 
 fn safe_directory_name(name: &str) -> Result<String, String> {

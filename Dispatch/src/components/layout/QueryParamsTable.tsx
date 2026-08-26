@@ -29,7 +29,7 @@ export const QueryParamsTable: React.FC<QueryParamsTableProps> = ({ params, onCh
       : null;
 
   return (
-    <div className="flex flex-col gap-2.5 shrink-0 font-sans text-xs">
+    <div className="flex flex-col gap-2 shrink-0 font-sans text-xs">
       <div className="flex items-center justify-between select-none">
         <span className="font-bold text-zinc-300 text-xs tracking-wide">Query Params</span>
       </div>

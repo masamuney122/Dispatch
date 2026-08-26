@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { Environment } from "../../types/environment";
 import { OverlayScrollArea } from "../common/OverlayScrollArea";
 import { EnvironmentContextMenu } from "./EnvironmentContextMenu";
@@ -32,6 +32,48 @@ export const EnvironmentSidebarSection: React.FC<
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editingName, setEditingName] = useState("");
     const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+    const [expandedHeight, setExpandedHeight] = useState<number | null>(null);
+    const [isResizing, setIsResizing] = useState(false);
+    const sectionRef = useRef<HTMLElement>(null);
+    const resizeStateRef = useRef<{
+      pointerId: number;
+      startY: number;
+      startHeight: number;
+      maximumHeight: number;
+    } | null>(null);
+
+    const startResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!open || !sectionRef.current) return;
+
+      const parentHeight = sectionRef.current.parentElement?.getBoundingClientRect().height
+        ?? window.innerHeight;
+      resizeStateRef.current = {
+        pointerId: event.pointerId,
+        startY: event.clientY,
+        startHeight: sectionRef.current.getBoundingClientRect().height,
+        maximumHeight: Math.max(220, parentHeight - 96),
+      };
+      setIsResizing(true);
+      event.currentTarget.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    };
+
+    const resize = (event: ReactPointerEvent<HTMLDivElement>) => {
+      const state = resizeStateRef.current;
+      if (!state || state.pointerId !== event.pointerId) return;
+
+      const nextHeight = state.startHeight + state.startY - event.clientY;
+      setExpandedHeight(Math.min(state.maximumHeight, Math.max(120, nextHeight)));
+    };
+
+    const finishResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (resizeStateRef.current?.pointerId !== event.pointerId) return;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      resizeStateRef.current = null;
+      setIsResizing(false);
+    };
 
     const filteredEnvironments = environments.filter(
       (environment) =>
@@ -66,20 +108,39 @@ export const EnvironmentSidebarSection: React.FC<
 
     return (
       <section
-        className="flex shrink-0 flex-col overflow-hidden border-t border-[#363636] bg-[#242424]"
+        ref={sectionRef}
+        className="relative flex shrink-0 flex-col overflow-hidden border-t border-[#363636] bg-[#242424]"
         style={{
-          height: open ? "34%" : "32px",
-          minHeight: open ? "220px" : "32px",
-          transition: "height 180ms ease, min-height 180ms ease",
+          height: open
+            ? expandedHeight === null ? "34%" : `${expandedHeight}px`
+            : "32px",
+          minHeight: open
+            ? expandedHeight === null ? "220px" : `${expandedHeight}px`
+            : "32px",
+          maxHeight: open ? "calc(100% - 96px)" : "32px",
+          transition: isResizing ? "none" : "height 180ms ease, min-height 180ms ease",
         }}
       >
+        {open && (
+          <div
+            role="separator"
+            aria-label="Resize environments panel"
+            aria-orientation="horizontal"
+            title="Drag to resize environments"
+            onPointerDown={startResize}
+            onPointerMove={resize}
+            onPointerUp={finishResize}
+            onPointerCancel={finishResize}
+            className="group absolute left-0 right-0 top-0 z-20 flex h-2 cursor-row-resize touch-none items-start"
+          >
+            <span className="h-px w-full bg-transparent transition-colors group-hover:bg-sky-500/70" />
+          </div>
+        )}
         <div
-          className="flex shrink-0 items-center justify-between text-[11px] font-bold tracking-wider text-zinc-300"
+          className="flex h-8 shrink-0 items-center justify-between text-[11px] font-bold tracking-wider text-zinc-300"
           style={{
             paddingLeft: "8px",
             paddingRight: "8px",
-            paddingTop: "8px",
-            paddingBottom: "8px",
           }}
         >
           <button

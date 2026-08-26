@@ -8,6 +8,7 @@ use crate::models::workspace::{
     EnvironmentsDocument, GlobalHttpSettings, RecentWorkspace, WorkspaceRuntimeState,
     WorkspaceSession, ENVIRONMENTS_FILE,
 };
+use crate::services::cookie_service::CookieRuntimeState;
 use crate::services::storage_service::read_json;
 use crate::services::workspace_service;
 
@@ -16,11 +17,18 @@ pub fn create_workspace(
     app_handle: tauri::AppHandle,
     runtime: tauri::State<'_, Mutex<WorkspaceRuntimeState>>,
     environment_state: tauri::State<'_, Mutex<AppState>>,
+    cookie_state: tauri::State<'_, Mutex<CookieRuntimeState>>,
     path: String,
     name: String,
 ) -> Result<WorkspaceSession, String> {
     let session = workspace_service::create_workspace(&PathBuf::from(path), &name)?;
-    activate_workspace(&app_handle, &runtime, &environment_state, session)
+    activate_workspace(
+        &app_handle,
+        &runtime,
+        &environment_state,
+        &cookie_state,
+        session,
+    )
 }
 
 #[tauri::command]
@@ -28,16 +36,24 @@ pub fn open_workspace(
     app_handle: tauri::AppHandle,
     runtime: tauri::State<'_, Mutex<WorkspaceRuntimeState>>,
     environment_state: tauri::State<'_, Mutex<AppState>>,
+    cookie_state: tauri::State<'_, Mutex<CookieRuntimeState>>,
     path: String,
 ) -> Result<WorkspaceSession, String> {
     let session = workspace_service::open_workspace(&PathBuf::from(path))?;
-    activate_workspace(&app_handle, &runtime, &environment_state, session)
+    activate_workspace(
+        &app_handle,
+        &runtime,
+        &environment_state,
+        &cookie_state,
+        session,
+    )
 }
 
 #[tauri::command]
 pub fn close_workspace(
     runtime: tauri::State<'_, Mutex<WorkspaceRuntimeState>>,
     environment_state: tauri::State<'_, Mutex<AppState>>,
+    cookie_state: tauri::State<'_, Mutex<CookieRuntimeState>>,
 ) -> Result<(), String> {
     runtime
         .lock()
@@ -46,6 +62,10 @@ pub fn close_workspace(
     *environment_state
         .lock()
         .map_err(|error| error.to_string())? = AppState::default();
+    cookie_state
+        .lock()
+        .map_err(|error| error.to_string())?
+        .deactivate();
     Ok(())
 }
 
@@ -105,12 +125,17 @@ pub fn activate_workspace(
     app_handle: &tauri::AppHandle,
     runtime: &Mutex<WorkspaceRuntimeState>,
     environment_state: &Mutex<AppState>,
+    cookie_state: &Mutex<CookieRuntimeState>,
     session: WorkspaceSession,
 ) -> Result<WorkspaceSession, String> {
     let environments: EnvironmentsDocument = read_json(
         &workspace_service::workspace_file(&session, ENVIRONMENTS_FILE),
         "environments document",
     )?;
+    cookie_state
+        .lock()
+        .map_err(|error| error.to_string())?
+        .activate(&session)?;
 
     let app_data_dir = app_handle
         .path()

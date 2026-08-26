@@ -3,10 +3,10 @@
 This document is intended to provide a comprehensive overview of the **Dispatch** project to any AI coding assistant to help them understand the architecture, tech stack, and core features before contributing to the codebase.
 
 ## 🚀 Overview
-Dispatch is a lightweight, cross-platform desktop API client. It is designed as a streamlined alternative to tools like Postman or Insomnia. It allows developers to construct, send, and manage HTTP requests, organize them into collections, and use environment variables.
+Dispatch is a lightweight API client with one shared React codebase targeting both Tauri desktop and Chromium-based web/PWA builds. It allows developers to construct, send, and manage HTTP requests, organize them into collections, and use environment variables.
 
 ## 🛠️ Technology Stack
-- **Application Framework**: [Tauri v2](https://v2.tauri.app/) (Builds smaller, faster desktop apps)
+- **Application Frameworks**: [Tauri v2](https://v2.tauri.app/) for desktop and browser/PWA APIs for web
 - **Frontend**: 
   - **React 19** (UI Library)
   - **TypeScript** (Type safety)
@@ -19,7 +19,7 @@ Dispatch is a lightweight, cross-platform desktop API client. It is designed as 
 
 ## 📁 Project Architecture
 
-The project is strictly divided into two parts: the React frontend (`src/`) and the Rust backend (`src-tauri/`).
+The project has one shared React frontend and two platform implementations selected at build time.
 
 ### Frontend (`src/`)
 - **`components/`**: Contains the React UI components.
@@ -28,14 +28,23 @@ The project is strictly divided into two parts: the React frontend (`src/`) and 
 - **`hooks/`**: Custom React hooks.
   - `useRequestTabs.ts`: Manages the state of currently open request tabs.
   - `useAppData.ts`: Manages the global state for history, collections, and environments.
-- **`services/`**: TypeScript wrappers that call Tauri backend commands using `@tauri-apps/api/core`.
+- **`services/`**: Platform-neutral facades imported by the shared UI.
+- **`platform/desktop/services/`**: Tauri command, dialog, and window adapters.
+- **`platform/web/`**: Browser fetch, File System Access API, IndexedDB, LocalStorage, and WASM adapters.
 - **`types/`**: TypeScript interfaces. **Crucial:** These types must always be kept in sync with the Rust models.
+
+Build selection is handled by the Vite `@platform/*` alias. Shared components must not import Tauri or browser persistence APIs directly.
 
 ### Backend (`src-tauri/src/`)
 - **`models/`**: Rust data structures that serialize/deserialize data to and from the frontend (e.g., `auth.rs`, `request.rs`, `response.rs`, `collection.rs`).
 - **`commands/`**: Tauri command handlers exposed to the frontend (e.g., `request_command.rs`, `history_command.rs`, `collection_command.rs`).
 - **`services/`**: Core business logic. This is where `reqwest` is utilized to actually send the HTTP requests.
 - **`lib.rs` / `main.rs`**: Tauri application configuration, plugin registration, and command registration.
+
+### Web Rust (`rust/`)
+
+- `dispatch-web-core`: platform-independent workspace validation and OpenAPI helpers.
+- `dispatch-web-wasm`: the `wasm-bindgen` bridge loaded by the web adapter.
 
 ## ✨ Core Features & Implementation Details
 
@@ -59,7 +68,8 @@ The project is strictly divided into two parts: the React frontend (`src/`) and 
    - **Collections**: Users can save specific requests into collections for future use.
 
 ## 🧑‍💻 Development Workflow
-- **Running the App**: `npm run tauri dev` starts both the Vite dev server and the Rust Tauri window.
+- **Running desktop**: `npm run tauri dev` starts the desktop-mode Vite server and Tauri window.
+- **Running web**: `npm run dev:web` builds WASM and starts the web-mode Vite server.
 - **Adding New Features**: 
   1. Define the data structure in both `src/types/` (TypeScript) and `src-tauri/src/models/` (Rust).
   2. Create or update a Tauri command in `src-tauri/src/commands/`.

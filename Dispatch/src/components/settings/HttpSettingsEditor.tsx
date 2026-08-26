@@ -4,6 +4,7 @@ import type {
   RequestHttpSettings,
 } from "../../types/httpSettings";
 import { resolveHttpSettings } from "../../types/httpSettings";
+import type { CookieCredentials } from "../../types/cookie";
 
 type Platform = "desktop" | "web";
 
@@ -28,10 +29,11 @@ const SettingRow = ({
   </div>
 );
 
-const Toggle = ({ checked, onChange, disabled = false }: { checked: boolean; onChange: () => void; disabled?: boolean }) => (
+export const SettingsToggle = ({ checked, onChange, disabled = false, label }: { checked: boolean; onChange: () => void; disabled?: boolean; label?: string }) => (
   <button
     type="button"
     role="switch"
+    aria-label={label}
     aria-checked={checked}
     disabled={disabled}
     onClick={onChange}
@@ -42,6 +44,7 @@ const Toggle = ({ checked, onChange, disabled = false }: { checked: boolean; onC
 );
 
 const BrowserManaged = () => <span className="text-[11px] font-medium text-zinc-500">Tarayıcı yönetir</span>;
+const WorkspaceManaged = () => <span className="text-[11px] font-medium text-zinc-500">Workspace cookie jar</span>;
 
 export function GlobalHttpSettingsEditor({
   value,
@@ -63,18 +66,25 @@ export function GlobalHttpSettingsEditor({
         ) : <BrowserManaged />}
       </SettingRow>
       <SettingRow title="SSL certificate verification" description="Geçersiz veya güvenilmeyen TLS sertifikalarında request'i durdurur.">
-        {desktop ? <Toggle checked={value.verify_ssl} onChange={() => onChange({ ...value, verify_ssl: !value.verify_ssl })} /> : <BrowserManaged />}
+        {desktop ? <SettingsToggle checked={value.verify_ssl} onChange={() => onChange({ ...value, verify_ssl: !value.verify_ssl })} /> : <BrowserManaged />}
       </SettingRow>
       <SettingRow title="Automatically follow redirects" description="HTTP 3xx response'larını yeni hedefe otomatik olarak takip eder.">
-        <Toggle checked={value.follow_redirects} onChange={() => onChange({ ...value, follow_redirects: !value.follow_redirects })} />
+        <SettingsToggle checked={value.follow_redirects} onChange={() => onChange({ ...value, follow_redirects: !value.follow_redirects })} />
       </SettingRow>
       <SettingRow title="Remove Referer on redirect" description="Redirect zincirinde Referer bilgisinin gönderilmesini engeller.">
-        <Toggle checked={value.remove_referer_on_redirect} onChange={() => onChange({ ...value, remove_referer_on_redirect: !value.remove_referer_on_redirect })} />
+        <SettingsToggle checked={value.remove_referer_on_redirect} onChange={() => onChange({ ...value, remove_referer_on_redirect: !value.remove_referer_on_redirect })} />
       </SettingRow>
       <SettingRow title="Maximum number of redirects" description="Takip edilecek redirect sayısına üst sınır koyar.">
         {desktop ? (
           <input type="number" min={1} max={100} disabled={!value.follow_redirects} value={value.max_redirects} onChange={(event) => onChange({ ...value, max_redirects: Math.min(100, Math.max(1, Number(event.target.value) || 1)) })} className="h-8 w-24 rounded-lg border border-[#484848] bg-[#202020] px-3 text-right text-xs text-zinc-200 outline-none focus:border-[#ff6c37] disabled:opacity-40" />
         ) : <BrowserManaged />}
+      </SettingRow>
+      <SettingRow title="Cookie credentials" description="Cookie'lerin request ile gönderilme politikasını belirler.">
+        {desktop ? <WorkspaceManaged /> : (
+          <select value={value.cookie_credentials} onChange={(event) => onChange({ ...value, cookie_credentials: event.target.value as CookieCredentials })} className="h-8 w-40 rounded-lg border border-[#484848] bg-[#202020] px-3 text-xs text-zinc-200 outline-none focus:border-[#ff6c37]">
+            <option value="omit">Omit</option><option value="same-origin">Same origin</option><option value="include">Include</option>
+          </select>
+        )}
       </SettingRow>
     </div>
   );
@@ -115,14 +125,14 @@ export function RequestHttpSettingsEditor({
         </> : <BrowserManaged />}
       </SettingRow>
       <SettingRow title="SSL certificate verification" description="Kapalı olduğunda self-signed sertifikalara izin verir; yalnızca geliştirme ortamında kullan.">
-        {desktop ? <><Toggle checked={resolved.verify_ssl} onChange={() => onChange({ ...value, verify_ssl: !resolved.verify_ssl })} />{footer("verify_ssl", globalSettings.verify_ssl ? "On" : "Off")}</> : <BrowserManaged />}
+        {desktop ? <><SettingsToggle checked={resolved.verify_ssl} onChange={() => onChange({ ...value, verify_ssl: !resolved.verify_ssl })} />{footer("verify_ssl", globalSettings.verify_ssl ? "On" : "Off")}</> : <BrowserManaged />}
       </SettingRow>
       <SettingRow title="Automatically follow redirects" description="Bu request için HTTP 3xx redirect davranışını belirler.">
-        <Toggle checked={resolved.follow_redirects} onChange={() => onChange({ ...value, follow_redirects: !resolved.follow_redirects })} />
+        <SettingsToggle checked={resolved.follow_redirects} onChange={() => onChange({ ...value, follow_redirects: !resolved.follow_redirects })} />
         {footer("follow_redirects", globalSettings.follow_redirects ? "On" : "Off")}
       </SettingRow>
       <SettingRow title="Remove Referer on redirect" description="Redirect sırasında hedef sunucuya Referer bilgisinin gönderilmesini engeller.">
-        <Toggle checked={resolved.remove_referer_on_redirect} onChange={() => onChange({ ...value, remove_referer_on_redirect: !resolved.remove_referer_on_redirect })} />
+        <SettingsToggle checked={resolved.remove_referer_on_redirect} onChange={() => onChange({ ...value, remove_referer_on_redirect: !resolved.remove_referer_on_redirect })} />
         {footer("remove_referer_on_redirect", globalSettings.remove_referer_on_redirect ? "On" : "Off")}
       </SettingRow>
       <SettingRow title="Maximum number of redirects" description="Bu request'in takip edebileceği redirect sayısını sınırlar.">
@@ -130,6 +140,14 @@ export function RequestHttpSettingsEditor({
           <input type="number" min={1} max={100} disabled={!resolved.follow_redirects} value={value.max_redirects ?? ""} placeholder={String(globalSettings.max_redirects)} onChange={(event) => event.target.value ? onChange({ ...value, max_redirects: Math.min(100, Math.max(1, Number(event.target.value) || 1)) }) : clear("max_redirects")} className="h-8 w-24 rounded-lg border border-[#484848] bg-[#202020] px-3 text-right text-xs text-zinc-200 outline-none focus:border-[#ff6c37] disabled:opacity-40" />
           {footer("max_redirects", String(globalSettings.max_redirects))}
         </> : <BrowserManaged />}
+      </SettingRow>
+      <SettingRow title="Cookie credentials" description="Web fetch request'i için cookie gönderme politikasını değiştirir.">
+        {desktop ? <WorkspaceManaged /> : <>
+          <select value={value.cookie_credentials ?? ""} onChange={(event) => event.target.value ? onChange({ ...value, cookie_credentials: event.target.value as CookieCredentials }) : clear("cookie_credentials")} className="h-8 w-44 rounded-lg border border-[#484848] bg-[#202020] px-3 text-xs text-zinc-200 outline-none focus:border-[#ff6c37]">
+            <option value="">Global ({globalSettings.cookie_credentials})</option><option value="omit">Omit</option><option value="same-origin">Same origin</option><option value="include">Include</option>
+          </select>
+          {footer("cookie_credentials", globalSettings.cookie_credentials)}
+        </>}
       </SettingRow>
     </div>
   );

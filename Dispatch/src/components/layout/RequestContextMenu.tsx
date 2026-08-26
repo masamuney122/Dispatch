@@ -32,18 +32,17 @@ const MenuItem = ({
   <div style={{ padding: "2px 6px" }}>
     <button
       onClick={onClick}
-      className="flex w-full items-center justify-between rounded-md text-left transition-colors hover:bg-zinc-800"
+      className={`flex w-full items-center justify-between rounded-md text-left transition-colors hover:bg-zinc-800 ${danger ? "text-red-400" : "text-zinc-200"}`}
       style={{
         fontSize: "13px",
         padding: "6px 12px",
-        color: danger ? "#f87171" : "#e4e4e4",
       }}
     >
       <span>{children}</span>
       {(shortcutText || shortcutIcon) && (
         <span
-          className="flex items-center"
-          style={{ color: "#888888", fontFamily: "sans-serif", letterSpacing: "0.025em" }}
+          className="flex items-center text-[#888888]"
+          style={{ fontFamily: "sans-serif", letterSpacing: "0.025em" }}
         >
           {shortcutText}
           {shortcutIcon}
@@ -95,14 +94,12 @@ export const RequestContextMenu: React.FC<RequestContextMenuProps> = ({
   return (
     <div
       ref={menuRef}
-      className="fixed z-[200] rounded-lg shadow-2xl"
+      className="fixed z-[200] rounded-lg border border-[#383838] bg-[#242424] shadow-2xl"
       style={{
         left: clampedX,
         top: clampedY,
         width: "170px",
         padding: "6px 0",
-        backgroundColor: "#242424",
-        border: "1px solid #383838",
       }}
       onClick={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}

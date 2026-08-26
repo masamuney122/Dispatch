@@ -17,6 +17,7 @@ import { EnvironmentEditor } from "./environment/EnvironmentEditor";
 import { OverlayScrollArea } from "./common/OverlayScrollArea";
 import { RequestHttpSettingsEditor } from "./settings/HttpSettingsEditor";
 import { GlobalSettingsDialog } from "./settings/GlobalSettingsDialog";
+import { CookieManagerDialog } from "./cookies/CookieManagerDialog";
 
 import { useRequestTabs } from "../hooks/useRequestTabs";
 import { useAppData } from "../hooks/useAppData";
@@ -35,11 +36,11 @@ import type { QueryParamItem } from "../types/tab";
 import type { Collection, SavedRequest } from "../types/collection";
 import type { ArchiveMode } from "../types/workspace";
 import type { OpenApiExportOptions, OpenApiImportOptions, OpenApiSource } from "../types/openapi";
-import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { exportWorkspaceArchive } from "../services/workspaceService";
 import { flushWorkspaceChanges } from "../services/workspaceLifecycle";
 import { exportCollectionOpenApi, importOpenApi, inspectOpenApi } from "../services/openApiService";
 import { loadGlobalHttpSettings, saveGlobalHttpSettings } from "../services/httpSettingsService";
+import { platformCapabilities } from "../services/platformService";
 import { DEFAULT_HTTP_SETTINGS, type GlobalHttpSettings, type RequestHttpSettings } from "../types/httpSettings";
 
 const RESPONSE_PANEL_DEFAULT_HEIGHT = 320;
@@ -117,6 +118,7 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
   const [openApiError, setOpenApiError] = useState<string | null>(null);
   const [globalHttpSettings, setGlobalHttpSettings] = useState<GlobalHttpSettings>(DEFAULT_HTTP_SETTINGS);
   const [globalSettingsOpen, setGlobalSettingsOpen] = useState(false);
+  const [cookieManagerOpen, setCookieManagerOpen] = useState(false);
   const [globalSettingsSaving, setGlobalSettingsSaving] = useState(false);
   const [globalSettingsError, setGlobalSettingsError] = useState<string | null>(null);
   const [responsePanelHeight, setResponsePanelHeight] = useState(RESPONSE_PANEL_DEFAULT_HEIGHT);
@@ -602,18 +604,37 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
     );
   };
 
-  const activeCollectionName = getActiveCollection()?.name;
+  const activeCollection = getActiveCollection();
+  const activeRequestBreadcrumb = (() => {
+    if (!activeCollection || !activeTab.selectedSavedRequestId) return [];
+
+    const savedRequest = activeCollection.requests.find(
+      (request) => request.id === activeTab.selectedSavedRequestId
+    );
+    if (!savedRequest) return [activeCollection.name];
+
+    const foldersById = new Map(
+      activeCollection.folders.map((folder) => [folder.id, folder])
+    );
+    const folderNames: string[] = [];
+    const visitedFolderIds = new Set<string>();
+    let folderId = savedRequest.folder_id ?? null;
+
+    while (folderId && !visitedFolderIds.has(folderId)) {
+      visitedFolderIds.add(folderId);
+      const folder = foldersById.get(folderId);
+      if (!folder) break;
+      folderNames.unshift(folder.name);
+      folderId = folder.parent_folder_id ?? null;
+    }
+
+    return [activeCollection.name, ...folderNames];
+  })();
 
   const handleExportWorkspace = async (mode: ArchiveMode) => {
-    const path = await saveDialog({
-      title: mode === "safe_share" ? "Safe Share arşivini kaydet" : "Workspace yedeğini kaydet",
-      defaultPath: `${workspaceName.replace(/[^a-zA-Z0-9._-]+/g, "-")}.dispatch`,
-      filters: [{ name: "Dispatch Workspace", extensions: ["dispatch"] }],
-    });
-    if (!path) return;
     try {
       await flushWorkspaceChanges();
-      await exportWorkspaceArchive(path, mode);
+      await exportWorkspaceArchive(mode, workspaceName);
     } catch (error) {
       window.alert(error instanceof Error ? error.message : String(error));
     }
@@ -648,18 +669,12 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
 
   const handleConfirmOpenApiExport = async (options: OpenApiExportOptions) => {
     if (!openApiExportCollection) return;
-    const extension = options.format === "json" ? "json" : "yaml";
-    const path = await saveDialog({
-      title: "OpenAPI belgesini kaydet",
-      defaultPath: `${openApiExportCollection.name.replace(/[^a-zA-Z0-9._-]+/g, "-")}.${extension}`,
-      filters: [{ name: `OpenAPI ${extension.toUpperCase()}`, extensions: [extension] }],
-    });
-    if (!path) return;
     setOpenApiSubmitting(true);
     setOpenApiError(null);
     try {
       await flushWorkspaceChanges();
-      const result = await exportCollectionOpenApi(openApiExportCollection.id, path, options);
+      const result = await exportCollectionOpenApi(openApiExportCollection, options);
+      if (result.cancelled) return;
       setOpenApiExportCollection(null);
       window.alert(`OpenAPI dışa aktarıldı: ${result.endpoint_count} endpoint`);
     } catch (error) {
@@ -681,8 +696,6 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
         onExportWorkspace={handleExportWorkspace}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        onClearHistory={handleClearHistory}
-        historyCount={history.length}
         onOpenSettings={() => { setGlobalSettingsError(null); setGlobalSettingsOpen(true); }}
       />
 
@@ -705,6 +718,7 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
           selectedSavedRequestId={activeTab.selectedSavedRequestId}
           history={history}
           onSelectHistory={handleSelectHistory}
+          onClearHistory={() => void handleClearHistory()}
           selectedHistoryId={activeTab.selectedHistoryId}
           environments={environments}
           activeEnvironmentId={activeEnvironmentId}
@@ -783,14 +797,14 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
                   containerClassName="flex-1 min-h-0"
                   axis="vertical"
                   className="overflow-y-auto"
-                  style={{ padding: "16px 48px 32px" }}
+                  style={{ padding: "10px 48px 28px" }}
                 >
-                  <div className="w-full flex flex-col gap-3">
+                  <div className="w-full flex flex-col gap-2">
                   {/* URL Bar */}
                   <UrlActionBar
                     method={activeTab.method}
                     title={getRequestName()}
-                    collectionName={activeCollectionName}
+                    breadcrumbItems={activeRequestBreadcrumb}
                     onChangeTitle={(t) => updateActiveTab({ title: t })}
                     onChangeMethod={(m) => updateActiveTab({ method: m as import("../types/request").HttpMethod })}
                     url={activeTab.url}
@@ -803,6 +817,7 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
                   {/* Request Section Tabs */}
                   <RequestSectionTabs
                     activeTab={activeTab.activeSectionTab}
+                    onOpenCookies={() => setCookieManagerOpen(true)}
                     onTabChange={(tab) =>
                       updateActiveTab({ activeSectionTab: tab as import("../types/request").RequestSectionTab })
                     }
@@ -857,7 +872,7 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
                       <RequestHttpSettingsEditor
                         value={activeTab.settings}
                         globalSettings={globalHttpSettings}
-                        platform="desktop"
+                        platform={platformCapabilities.advancedHttpSettings ? "desktop" : "web"}
                         onChange={(settings) => updateActiveTab({ settings })}
                       />
                     )}
@@ -937,11 +952,18 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
       {globalSettingsOpen && (
         <GlobalSettingsDialog
           settings={globalHttpSettings}
-          platform="desktop"
+          platform={platformCapabilities.advancedHttpSettings ? "desktop" : "web"}
           saving={globalSettingsSaving}
           error={globalSettingsError}
           onClose={() => !globalSettingsSaving && setGlobalSettingsOpen(false)}
           onSave={handleSaveGlobalSettings}
+        />
+      )}
+
+      {cookieManagerOpen && (
+        <CookieManagerDialog
+          requestUrl={activeTab.url}
+          onClose={() => setCookieManagerOpen(false)}
         />
       )}
     </div>

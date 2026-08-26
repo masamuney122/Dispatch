@@ -67,3 +67,367 @@ textarea::-webkit-scrollbar-thumb {
 
 /* ─── Selection ─── */
 ::selection { background: rgba(99, 138, 248, 0.2); color: #1e2535; }
+
+/* ─── Yapı Kredi light theme ───
+ * The application predates theme tokens and uses literal Tailwind colors.
+ * These mappings keep the existing dark palette untouched while giving every
+ * shared surface a consistent light counterpart.
+ */
+html[data-theme="light"] {
+  color-scheme: light;
+  --dispatch-page: #eef5fb;
+  --dispatch-surface: #ffffff;
+  --dispatch-surface-subtle: #f6f9fc;
+  --dispatch-surface-muted: #eaf2f8;
+  --dispatch-surface-active: #dcecf8;
+  --dispatch-border: #d6e1ea;
+  --dispatch-border-strong: #b8cad9;
+  --dispatch-text: #153b5d;
+  --dispatch-text-secondary: #3f607c;
+  --dispatch-text-muted: #70869a;
+  --dispatch-text-faint: #94a5b4;
+  --dispatch-blue: #005ca9;
+  --dispatch-blue-hover: #004b8c;
+}
+
+html[data-theme="light"] body {
+  background: var(--dispatch-page);
+  color: var(--dispatch-text-secondary);
+}
+
+html[data-theme="light"] textarea {
+  scrollbar-color: #b6c8d7 transparent;
+}
+
+html[data-theme="light"] textarea::-webkit-scrollbar-thumb {
+  background: #b6c8d7;
+}
+
+html[data-theme="light"] ::selection {
+  background: rgba(0, 92, 169, 0.18);
+  color: #0b3254;
+}
+
+html[data-theme="light"] :is(
+  [class~="bg-[#242424]"],
+  [class~="bg-[#252525]"]
+) {
+  background-color: var(--dispatch-surface);
+}
+
+html[data-theme="light"] :is(
+  [class~="bg-[#202020]"],
+  [class~="bg-[#222222]"],
+  [class~="bg-[#222]"],
+  [class~="bg-[#1d1d1d]"],
+  [class~="bg-[#212121]"],
+  [class~="bg-[#141414]"]
+) {
+  background-color: var(--dispatch-surface-subtle);
+}
+
+html[data-theme="light"] :is(
+  [class~="bg-[#272727]"],
+  [class~="bg-[#282828]"],
+  [class~="bg-[#292929]"],
+  [class~="bg-[#2a2a2a]"],
+  [class~="bg-[#2c2c2c]"],
+  [class~="bg-[#2e2e2e]"],
+  [class~="bg-[#303030]"],
+  [class~="bg-[#343434]"],
+  [class~="bg-[#383838]"],
+  [class~="bg-[#3a3a3a]"]
+) {
+  background-color: var(--dispatch-surface-muted);
+}
+
+html[data-theme="light"] :is(
+  [class~="bg-[#333]"],
+  [class~="bg-[#333333]"]
+) {
+  background-color: var(--dispatch-surface-active);
+}
+
+html[data-theme="light"] :is(
+  [class~="border-[#2a2a2a]"],
+  [class~="border-[#2e2e2e]"],
+  [class~="border-[#303030]"],
+  [class~="border-[#333333]"],
+  [class~="border-[#343434]"],
+  [class~="border-[#363636]"],
+  [class~="border-[#373737]"],
+  [class~="border-[#383838]"],
+  [class~="border-[#393939]"],
+  [class~="border-[#3a3a3a]"],
+  [class~="border-[#3b3b3b]"],
+  [class~="border-[#3c3c3c]"],
+  [class~="border-[#3d3d3d]"],
+  [class~="border-[#404040]"],
+  [class~="border-[#404040]/50"],
+  [class~="border-[#414141]"],
+  [class~="border-[#444]"],
+  [class~="border-[#464646]"],
+  [class~="border-[#484848]"],
+  [class~="border-zinc-700"]
+) {
+  border-color: var(--dispatch-border);
+}
+
+html[data-theme="light"] [class~="divide-[#282828]"] > :not(:last-child) {
+  border-color: var(--dispatch-border);
+}
+
+html[data-theme="light"] :is(
+  [class~="border-[#555555]"],
+  [class~="border-[#637083]"]
+) {
+  border-color: var(--dispatch-border-strong);
+}
+
+html[data-theme="light"] :is(
+  [class~="text-zinc-50"],
+  [class~="text-zinc-100"]
+) {
+  color: var(--dispatch-text);
+}
+
+html[data-theme="light"] :is(
+  [class~="text-zinc-200"],
+  [class~="text-zinc-300"]
+) {
+  color: var(--dispatch-text-secondary);
+}
+
+html[data-theme="light"] :is(
+  [class~="text-zinc-400"],
+  [class~="text-[#969696]"],
+  [class~="text-[#858585]"]
+) {
+  color: var(--dispatch-text-muted);
+}
+
+html[data-theme="light"] :is(
+  [class~="text-zinc-500"],
+  [class~="text-zinc-600"],
+  [class~="text-[#888888]"]
+) {
+  color: var(--dispatch-text-faint);
+}
+
+html[data-theme="light"] [class~="placeholder-zinc-500"]::placeholder {
+  color: var(--dispatch-text-faint);
+}
+
+html[data-theme="light"] [class~="text-white"] {
+  color: var(--dispatch-text);
+}
+
+html[data-theme="light"] :is(
+  [class~="hover:text-white"],
+  [class~="hover:text-zinc-100"],
+  [class~="hover:text-zinc-200"],
+  [class~="hover:text-zinc-300"]
+):hover {
+  color: var(--dispatch-text);
+}
+
+html[data-theme="light"] :is(
+  [class~="hover:bg-[#202020]"],
+  [class~="hover:bg-[#242424]"],
+  [class~="hover:bg-[#252525]"],
+  [class~="hover:bg-[#282828]"],
+  [class~="hover:bg-[#292929]"],
+  [class~="hover:bg-[#2a2a2a]"],
+  [class~="hover:bg-[#2e2e2e]"],
+  [class~="hover:bg-[#303030]"],
+  [class~="hover:bg-[#333]"],
+  [class~="hover:bg-[#333333]"],
+  [class~="hover:bg-[#383838]"],
+  [class~="hover:bg-zinc-800"]
+):hover {
+  background-color: var(--dispatch-surface-active);
+}
+
+html[data-theme="light"] :is(
+  [class~="hover:border-[#494949]"],
+  [class~="hover:border-[#555]"],
+  [class~="hover:border-[#565656]"],
+  [class~="hover:border-[#666]"]
+):hover {
+  border-color: #91b0c9;
+}
+
+html[data-theme="light"] :is(
+  [class~="bg-[#ff6c37]"],
+  [class~="bg-[#e85b2b]"],
+  [class~="bg-[#3467d6]"],
+  [class~="bg-[#2958bf]"]
+) {
+  background-color: var(--dispatch-blue);
+}
+
+html[data-theme="light"] :is(
+  [class~="hover:bg-[#ff7a47]"],
+  [class~="hover:bg-[#4076e6]"]
+):hover {
+  background-color: var(--dispatch-blue-hover);
+}
+
+html[data-theme="light"] :is(
+  [class~="active:bg-[#e85b2b]"],
+  [class~="active:bg-[#2958bf]"]
+):active {
+  background-color: var(--dispatch-blue-hover);
+}
+
+html[data-theme="light"] :is(
+  [class~="border-[#ff6c37]"]
+) {
+  border-color: var(--dispatch-blue);
+}
+
+html[data-theme="light"] [class~="border-[#7aa2f7]"] {
+  border-color: #6fa4ce;
+}
+
+html[data-theme="light"] [class~="border-[#ff6c37]/25"] {
+  border-color: rgba(0, 92, 169, 0.32);
+}
+
+html[data-theme="light"] :is(
+  [class~="text-[#ff7a47]"],
+  [class~="text-[#ff8a61]"]
+) {
+  color: var(--dispatch-blue);
+}
+
+html[data-theme="light"] :is(
+  [class~="focus:border-[#ff6c37]"],
+  [class~="focus:border-[#ff6c37]/80"],
+  [class~="focus:border-[#5b8def]"]
+):focus {
+  border-color: var(--dispatch-blue);
+}
+
+html[data-theme="light"] [class~="hover:border-[#ff6c37]/45"]:hover {
+  border-color: rgba(0, 92, 169, 0.5);
+}
+
+html[data-theme="light"] [class~="hover:text-[#ff7a47]"]:hover {
+  color: var(--dispatch-blue);
+}
+
+html[data-theme="light"] :is(
+  [class~="bg-[#ff6c37]/10"],
+  [class~="bg-[#ff6c37]/[0.035]"]
+) {
+  background-color: rgba(0, 92, 169, 0.09);
+}
+
+html[data-theme="light"] [class~="bg-[#ff6c37]/30"] {
+  background-color: rgba(0, 92, 169, 0.24);
+}
+
+html[data-theme="light"] :is(
+  [class~="bg-[#454545]"],
+  [class~="bg-[#4a4a4a]"],
+  [class~="bg-zinc-600"]
+) {
+  background-color: #b8cad9;
+}
+
+html[data-theme="light"] :is(
+  [class~="bg-[#ff6c37]"],
+  [class~="bg-[#e85b2b]"],
+  [class~="bg-[#3467d6]"],
+  [class~="bg-[#2958bf]"],
+  [class~="bg-blue-600"],
+  [class~="bg-red-600"],
+  [class~="bg-red-500"],
+  [class~="bg-amber-600"],
+  [class~="bg-sky-600"]
+) {
+  color: #ffffff;
+}
+
+html[data-theme="light"] :is(
+  [class~="bg-black/65"],
+  [class~="bg-black/60"]
+) {
+  background-color: rgba(15, 47, 72, 0.3);
+}
+
+html[data-theme="light"] :is(
+  [class~="bg-red-950/20"],
+  [class~="bg-red-950/25"],
+  [class~="bg-red-500/10"]
+) {
+  background-color: #fff3f2;
+}
+
+html[data-theme="light"] :is(
+  [class~="text-red-300"],
+  [class~="text-red-400"]
+) {
+  color: #b42318;
+}
+
+html[data-theme="light"] :is(
+  [class~="text-rose-300"],
+  [class~="text-rose-100/65"]
+) {
+  color: #b42318;
+}
+
+html[data-theme="light"] [class~="text-emerald-400"] {
+  color: #067647;
+}
+
+html[data-theme="light"] [class~="hover:text-red-400"]:hover {
+  color: #b42318;
+}
+
+html[data-theme="light"] [class~="text-[#569cd6]"] {
+  color: #005ca9;
+}
+
+html[data-theme="light"] [class~="text-[#8cdcfe]"] {
+  color: #075985;
+}
+
+html[data-theme="light"] [class~="text-[#ce9178]"] {
+  color: #9a3e00;
+}
+
+html[data-theme="light"] [class~="text-[#b5cea8]"] {
+  color: #347335;
+}
+
+html[data-theme="light"] :is(
+  [class~="border-red-900/60"],
+  [class~="border-red-900/70"],
+  [class~="border-red-500/20"],
+  [class~="border-red-500/30"],
+  [class~="border-red-500/50"]
+) {
+  border-color: #f5b7b1;
+}
+
+html[data-theme="light"] :is(
+  [class~="bg-[#292122]"],
+  [class~="bg-[#201a1b]"]
+) {
+  background-color: #fff3f2;
+}
+
+html[data-theme="light"] :is(
+  [class~="border-[#4a3132]"],
+  [class~="border-[#3d2b2c]"]
+) {
+  border-color: #f5b7b1;
+}
+
+html[data-theme="light"] .shadow-2xl,
+html[data-theme="light"] .shadow-lg {
+  box-shadow: 0 18px 45px rgba(22, 67, 102, 0.16);
+}

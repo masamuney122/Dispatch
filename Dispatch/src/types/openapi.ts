@@ -3,7 +3,7 @@ import type { Environment } from "./environment";
 
 export type OpenApiExportFormat = "json" | "yaml";
 export type OpenApiSource =
-  | { kind: "file"; path: string }
+  | { kind: "file"; name: string; path?: string; content?: string }
   | { kind: "text"; content: string };
 export type OpenApiRequestNaming = "fallback" | "path" | "url";
 export type OpenApiFolderOrganization = "tags" | "path";
@@ -49,7 +49,7 @@ export interface OpenApiExportOptions {
 }
 
 export interface OpenApiExportResult {
-  path: string;
   endpoint_count: number;
   warnings: OpenApiWarning[];
+  cancelled?: boolean;
 }

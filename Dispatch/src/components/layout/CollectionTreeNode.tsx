@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import type { TreeNode } from "../../utils/collectionTree";
 import type { SavedRequest } from "../../types/collection";
@@ -142,6 +142,20 @@ export const CollectionTreeNode: React.FC<CollectionTreeNodeProps> = ({
   const [newFolderName, setNewFolderName] = useState("");
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const dotsRef = useRef<HTMLButtonElement>(null);
+  const newSubFolderFormRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    if (!isCreatingSubFolder) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (newSubFolderFormRef.current?.contains(event.target as Node)) return;
+      setIsCreatingSubFolder(false);
+      setNewFolderName("");
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [isCreatingSubFolder]);
 
   const indent = depth * 11;
 
@@ -421,6 +435,7 @@ export const CollectionTreeNode: React.FC<CollectionTreeNodeProps> = ({
           {/* Inline: new subfolder form */}
           {isCreatingSubFolder && (
             <form
+              ref={newSubFolderFormRef}
               onSubmit={(e) => void handleCreateSubFolder(e)}
               className="flex gap-1.5 items-center py-1 relative z-10"
               style={{
@@ -433,7 +448,10 @@ export const CollectionTreeNode: React.FC<CollectionTreeNodeProps> = ({
                 value={newFolderName}
                 onChange={(e) => setNewFolderName(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Escape") setIsCreatingSubFolder(false);
+                  if (e.key === "Escape") {
+                    setIsCreatingSubFolder(false);
+                    setNewFolderName("");
+                  }
                 }}
                 placeholder="Folder name"
                 className="flex-1 min-w-0 bg-[#141414] border border-[#383838] rounded text-xs text-zinc-100 focus:outline-none focus:border-[#555] px-2 py-1"

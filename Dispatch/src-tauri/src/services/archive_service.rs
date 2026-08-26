@@ -10,6 +10,7 @@ use zip::{CompressionMethod, ZipArchive, ZipWriter};
 use crate::models::archive::{
     ArchiveManifest, ArchiveMode, ArchivePreview, ARCHIVE_FORMAT, ARCHIVE_VERSION,
 };
+use crate::models::cookie::CookieJarDocument;
 use crate::models::workspace::{
     CollectionsDocument, EnvironmentsDocument, WorkspaceManifest, WorkspaceSession,
     COLLECTIONS_FILE, ENVIRONMENTS_FILE, WORKSPACE_FORMAT, WORKSPACE_MANIFEST_FILE,
@@ -17,6 +18,7 @@ use crate::models::workspace::{
 };
 use crate::services::storage_service::{read_json, replace_file_atomic, write_json_atomic};
 use crate::services::workspace_service;
+use crate::services::cookie_service::COOKIES_FILE;
 
 const MAX_ARCHIVE_ENTRIES: usize = 1_000;
 const MAX_ENTRY_SIZE: u64 = 20 * 1024 * 1024;
@@ -25,6 +27,7 @@ const ARCHIVE_MANIFEST_PATH: &str = "archive.json";
 const WORKSPACE_MANIFEST_PATH: &str = "workspace/dispatch.workspace.json";
 const COLLECTIONS_PATH: &str = "workspace/collections.json";
 const ENVIRONMENTS_PATH: &str = "workspace/environments.json";
+const COOKIES_PATH: &str = "workspace/cookies.json";
 const ASSETS_PREFIX: &str = "workspace/assets/";
 
 struct ParsedArchive {
@@ -32,6 +35,7 @@ struct ParsedArchive {
     workspace: WorkspaceManifest,
     collections: CollectionsDocument,
     environments: EnvironmentsDocument,
+    cookies: Option<CookieJarDocument>,
     assets: BTreeMap<String, Vec<u8>>,
 }
 
@@ -84,6 +88,13 @@ pub fn export_workspace(
         }
     };
     files.insert(ENVIRONMENTS_PATH.to_string(), environments_bytes);
+    let cookies_path = workspace_service::workspace_file(session, COOKIES_FILE);
+    if matches!(mode, ArchiveMode::Backup) && cookies_path.exists() {
+        files.insert(
+            COOKIES_PATH.to_string(),
+            read_file_limited(&cookies_path, MAX_ENTRY_SIZE)?,
+        );
+    }
     collect_assets(&session.root_path.join("assets"), &mut files)?;
 
     if files.len() + 1 > MAX_ARCHIVE_ENTRIES {
@@ -197,6 +208,13 @@ pub fn import_archive(
             &environments,
             "imported environments document",
         )?;
+        if let Some(cookies) = parsed.cookies {
+            write_json_atomic(
+                &staging.join(COOKIES_FILE),
+                &cookies,
+                "imported cookie jar",
+            )?;
+        }
 
         for (relative_path, bytes) in parsed.assets {
             let asset_path = staging.join("assets").join(relative_path);
@@ -318,6 +336,17 @@ fn parse_archive(path: &Path) -> Result<ParsedArchive, String> {
     {
         return Err("Archive workspace documents are inconsistent".to_string());
     }
+    let cookies = files
+        .get(COOKIES_PATH)
+        .map(|bytes| {
+            let document: CookieJarDocument = serde_json::from_slice(bytes)
+                .map_err(|error| format!("Invalid {COOKIES_PATH}: {error}"))?;
+            if document.schema_version != 1 {
+                return Err("Archive contains an unsupported cookie jar".to_string());
+            }
+            Ok(document)
+        })
+        .transpose()?;
 
     let assets = files
         .into_iter()
@@ -333,6 +362,7 @@ fn parse_archive(path: &Path) -> Result<ParsedArchive, String> {
         workspace,
         collections,
         environments,
+        cookies,
         assets,
     })
 }
@@ -431,7 +461,11 @@ fn validate_archive_path(path: &str) -> Result<(), String> {
 fn is_allowed_archive_file(path: &str) -> bool {
     matches!(
         path,
-        ARCHIVE_MANIFEST_PATH | WORKSPACE_MANIFEST_PATH | COLLECTIONS_PATH | ENVIRONMENTS_PATH
+        ARCHIVE_MANIFEST_PATH
+            | WORKSPACE_MANIFEST_PATH
+            | COLLECTIONS_PATH
+            | ENVIRONMENTS_PATH
+            | COOKIES_PATH
     ) || path.starts_with(ASSETS_PREFIX)
 }
 
@@ -443,7 +477,9 @@ fn sha256(bytes: &[u8]) -> String {
 mod tests {
     use super::{export_workspace, import_archive, inspect_archive};
     use crate::models::archive::ArchiveMode;
+    use crate::models::cookie::{CookieJarDocument, StoredCookie};
     use crate::models::workspace::{EnvironmentsDocument, ENVIRONMENTS_FILE};
+    use crate::services::cookie_service::COOKIES_FILE;
     use crate::services::storage_service::{read_json, write_json_atomic};
     use crate::services::workspace_service;
 
@@ -468,6 +504,22 @@ mod tests {
                 updated_at: String::new(),
             });
         write_json_atomic(&environments_path, &environments, "environments").unwrap();
+        let cookies = CookieJarDocument {
+            schema_version: 1,
+            cookies: vec![StoredCookie {
+                name: "session".into(),
+                value: "secret-cookie".into(),
+                domain: "example.com".into(),
+                path: "/".into(),
+                expires_at: None,
+                secure: true,
+                http_only: true,
+                same_site: Some("lax".into()),
+                host_only: true,
+                enabled: true,
+            }],
+        };
+        write_json_atomic(&source_path.join(COOKIES_FILE), &cookies, "cookies").unwrap();
 
         let archive_path = test_root.join("source.dispatch");
         export_workspace(&source, &archive_path, ArchiveMode::SafeShare).unwrap();
@@ -479,6 +531,17 @@ mod tests {
         let imported: EnvironmentsDocument =
             read_json(&imported_path.join(ENVIRONMENTS_FILE), "environments").unwrap();
         assert_eq!(imported.environments[0].variables["TOKEN"], "");
+        let safe_share_cookies: CookieJarDocument =
+            read_json(&imported_path.join(COOKIES_FILE), "cookies").unwrap();
+        assert!(safe_share_cookies.cookies.is_empty());
+
+        let backup_path = test_root.join("source-backup.dispatch");
+        export_workspace(&source, &backup_path, ArchiveMode::Backup).unwrap();
+        let restored_path = test_root.join("restored");
+        import_archive(&backup_path, &restored_path, Some("Restored")).unwrap();
+        let restored_cookies: CookieJarDocument =
+            read_json(&restored_path.join(COOKIES_FILE), "cookies").unwrap();
+        assert_eq!(restored_cookies.cookies[0].value, "secret-cookie");
 
         std::fs::remove_dir_all(test_root).unwrap();
     }

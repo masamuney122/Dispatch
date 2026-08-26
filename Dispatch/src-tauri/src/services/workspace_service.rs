@@ -6,6 +6,7 @@ use crate::models::workspace::{
     WorkspaceSession, COLLECTIONS_FILE, ENVIRONMENTS_FILE, WORKSPACE_FORMAT,
     WORKSPACE_MANIFEST_FILE, WORKSPACE_SCHEMA_VERSION,
 };
+use crate::services::cookie_service;
 use crate::services::storage_service::{read_json, write_json_atomic};
 
 const APP_SETTINGS_FILE: &str = "app-settings.json";
@@ -55,6 +56,7 @@ pub fn create_workspace(root: &Path, name: &str) -> Result<WorkspaceSession, Str
     )?;
     fs::create_dir_all(root.join("assets"))
         .map_err(|error| format!("Failed to create workspace assets directory: {error}"))?;
+    cookie_service::create_empty_cookie_jar(root)?;
 
     open_workspace(root)
 }
@@ -93,6 +95,16 @@ pub fn open_workspace(root: &Path) -> Result<WorkspaceSession, String> {
         &manifest.id,
         "environments document",
     )?;
+
+    dispatch_web_core::parse_and_validate(
+        &serde_json::to_string(&manifest)
+            .map_err(|error| format!("Failed to validate workspace manifest: {error}"))?,
+        &serde_json::to_string(&collections)
+            .map_err(|error| format!("Failed to validate collections document: {error}"))?,
+        &serde_json::to_string(&environments)
+            .map_err(|error| format!("Failed to validate environments document: {error}"))?,
+    )
+    .map_err(|error| error.to_string())?;
 
     Ok(WorkspaceSession {
         root_path,

@@ -61,7 +61,7 @@ export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ respon
 
   const sectionTabs: { key: ResponseSection; label: string; suffix?: React.ReactNode }[] = [
     { key: "body", label: "Body" },
-    { key: "cookies", label: "Cookies" },
+    { key: "cookies", label: "Cookies", suffix: response?.cookies?.length ? <span className="ml-0.5 font-mono text-[10px] text-zinc-500">{response.cookies.length}</span> : undefined },
     { key: "headers", label: "Headers", suffix: <span className="ml-0.5 font-mono text-[10px] text-zinc-500">{responseData?.headers.length || 0}</span> },
 
   ];
@@ -228,9 +228,20 @@ export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ respon
           )}
 
           {section === "cookies" && (
-            <div className="flex-1 p-8 text-center text-[#969696] font-mono text-[14.5px] flex items-center justify-center">
-              No cookies received in response.
-            </div>
+            response?.cookie_handling === "browser" ? (
+              <div className="flex flex-1 items-center justify-center p-8 text-center">
+                <div><p className="text-sm font-semibold text-zinc-300">Browser managed cookies</p><p className="mt-2 max-w-lg text-xs leading-5 text-zinc-500">Tarayıcı Set-Cookie header'ını JavaScript'e göstermediği için response cookie listesi web sürümünde okunamaz.</p></div>
+              </div>
+            ) : response?.cookies?.length ? (
+              <OverlayScrollArea containerClassName="flex-1 min-h-0" className="overflow-auto" style={{ padding: "20px 48px 24px" }}>
+                <table className="w-full table-fixed overflow-hidden border-separate border-spacing-0 border border-[#343434] bg-[#202020] text-left font-mono text-xs">
+                  <thead className="sticky top-0 z-10 bg-[#242424] text-[#969696]"><tr className="h-8"><th className="w-[18%] border-b border-[#343434] px-3 font-medium">Name</th><th className="w-[28%] border-b border-l border-[#343434] px-3 font-medium">Value</th><th className="w-[20%] border-b border-l border-[#343434] px-3 font-medium">Domain</th><th className="w-[12%] border-b border-l border-[#343434] px-3 font-medium">Path</th><th className="border-b border-l border-[#343434] px-3 font-medium">Attributes</th></tr></thead>
+                  <tbody>{response.cookies.map((cookie) => <tr key={`${cookie.domain}:${cookie.path}:${cookie.name}`} className="h-8 text-zinc-300"><td className="truncate border-b border-[#2e2e2e] px-3">{cookie.name}</td><td className="truncate border-b border-l border-[#2e2e2e] px-3 text-zinc-400">{cookie.value}</td><td className="truncate border-b border-l border-[#2e2e2e] px-3 text-zinc-400">{cookie.domain}</td><td className="truncate border-b border-l border-[#2e2e2e] px-3 text-zinc-400">{cookie.path}</td><td className="truncate border-b border-l border-[#2e2e2e] px-3 text-[10px] text-zinc-500">{[cookie.secure && "Secure", cookie.http_only && "HttpOnly", cookie.same_site && `SameSite=${cookie.same_site}`, cookie.expires_at ? new Date(cookie.expires_at * 1000).toLocaleString() : "Session"].filter(Boolean).join(" · ")}</td></tr>)}</tbody>
+                </table>
+              </OverlayScrollArea>
+            ) : (
+              <div className="flex flex-1 items-center justify-center p-8 text-center font-mono text-[14.5px] text-[#969696]">No cookies received in response.</div>
+            )
           )}
 
           {section === "headers" && (

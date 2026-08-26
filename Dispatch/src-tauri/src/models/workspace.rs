@@ -74,6 +74,8 @@ pub struct GlobalHttpSettings {
     pub follow_redirects: bool,
     pub remove_referer_on_redirect: bool,
     pub max_redirects: usize,
+    #[serde(default)]
+    pub cookie_credentials: crate::models::request::CookieCredentials,
 }
 
 impl Default for GlobalHttpSettings {
@@ -84,6 +86,7 @@ impl Default for GlobalHttpSettings {
             follow_redirects: true,
             remove_referer_on_redirect: false,
             max_redirects: 10,
+            cookie_credentials: crate::models::request::CookieCredentials::SameOrigin,
         }
     }
 }

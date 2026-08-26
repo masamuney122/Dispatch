@@ -4,6 +4,7 @@ pub mod services;
 
 use models::environment::AppState;
 use models::workspace::WorkspaceRuntimeState;
+use services::cookie_service::CookieRuntimeState;
 use std::sync::Mutex;
 use tauri::Manager;
 
@@ -13,6 +14,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(Mutex::new(AppState::default()))
         .manage(Mutex::new(WorkspaceRuntimeState::default()))
+        .manage(Mutex::new(CookieRuntimeState::default()))
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -45,6 +47,7 @@ pub fn run() {
                             app.handle(),
                             app.state::<Mutex<WorkspaceRuntimeState>>().inner(),
                             app.state::<Mutex<AppState>>().inner(),
+                            app.state::<Mutex<CookieRuntimeState>>().inner(),
                             session,
                         ) {
                             log::warn!("Last workspace could not be activated: {error}");
@@ -83,6 +86,11 @@ pub fn run() {
             commands::collection_command::duplicate_folder,
             commands::collection_command::create_request_in_collection,
             commands::collection_command::reorder_items,
+            commands::cookie_command::list_cookies,
+            commands::cookie_command::upsert_cookie,
+            commands::cookie_command::set_cookie_enabled,
+            commands::cookie_command::delete_cookie,
+            commands::cookie_command::clear_cookies,
             commands::environment_command::create_environment,
             commands::environment_command::list_environments,
             commands::environment_command::update_environment,

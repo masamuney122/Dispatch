@@ -6,7 +6,10 @@ use crate::models::response::ApiResponse;
 use crate::models::workspace::GlobalHttpSettings;
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Instant;
+
+use crate::services::cookie_service::ManagedCookieJar;
 
 const SUPPORTED_METHODS: [&str; 7] = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 
@@ -17,6 +20,14 @@ pub async fn send_request(request: ApiRequest) -> Result<ApiResponse, String> {
 pub async fn send_request_with_settings(
     request: ApiRequest,
     global_settings: &GlobalHttpSettings,
+) -> Result<ApiResponse, String> {
+    send_request_with_cookie_jar(request, global_settings, None).await
+}
+
+pub async fn send_request_with_cookie_jar(
+    request: ApiRequest,
+    global_settings: &GlobalHttpSettings,
+    cookie_jar: Option<Arc<ManagedCookieJar>>,
 ) -> Result<ApiResponse, String> {
     let start = Instant::now();
     let method = request.method.to_uppercase();
@@ -56,6 +67,9 @@ pub async fn send_request_with_settings(
         .danger_accept_invalid_certs(!verify_ssl)
         .referer(!remove_referer)
         .redirect(redirect_policy);
+    if let Some(cookie_jar) = cookie_jar {
+        client_builder = client_builder.cookie_provider(cookie_jar);
+    }
     client_builder = match http_version {
         HttpVersionPreference::Auto => client_builder,
         HttpVersionPreference::Http1 => client_builder.http1_only(),
@@ -117,6 +131,8 @@ pub async fn send_request_with_settings(
         body_base64,
         body_size,
         headers: response_headers,
+        cookies: Vec::new(),
+        cookie_handling: "workspace".to_string(),
     })
 }
 
@@ -410,6 +426,54 @@ mod tests {
     }
 
     #[test]
+    fn stores_redirect_cookies_and_sends_them_to_the_redirect_target() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind redirect server");
+        let address = listener.local_addr().expect("read redirect address");
+        let (sender, receiver) = mpsc::channel();
+
+        thread::spawn(move || {
+            let (mut first, _) = listener.accept().expect("accept first request");
+            let mut bytes = [0_u8; 2048];
+            let _ = first.read(&mut bytes).expect("read first request");
+            first
+                .write_all(
+                    b"HTTP/1.1 302 Found\r\nLocation: /final\r\nSet-Cookie: session=redirected; Path=/; HttpOnly\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                )
+                .expect("write redirect response");
+            drop(first);
+
+            let (mut second, _) = listener.accept().expect("accept redirected request");
+            let size = second.read(&mut bytes).expect("read redirected request");
+            sender
+                .send(String::from_utf8_lossy(&bytes[..size]).into_owned())
+                .expect("send redirected request");
+            second
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
+                .expect("write final response");
+        });
+
+        let jar = Arc::new(ManagedCookieJar::default());
+        let response = tauri::async_runtime::block_on(send_request_with_cookie_jar(
+            request(
+                format!("http://{address}/start"),
+                "GET",
+                RequestBodyType::None,
+            ),
+            &GlobalHttpSettings::default(),
+            Some(jar.clone()),
+        ))
+        .expect("follow redirect with cookie jar");
+
+        assert_eq!(response.status, 200);
+        assert!(receiver
+            .recv()
+            .expect("redirected request")
+            .to_ascii_lowercase()
+            .contains("cookie: session=redirected"));
+        assert_eq!(jar.list().expect("list jar")[0].name, "session");
+    }
+
+    #[test]
     fn encodes_urlencoded_and_binary_bodies() {
         let (url, received) = capture_one_request();
         let mut form_request = request(url, "POST", RequestBodyType::XWwwFormUrlencoded);
@@ -420,7 +484,7 @@ mod tests {
         tauri::async_runtime::block_on(send_request(form_request)).expect("send form request");
         let form_message = received.recv().expect("captured form request");
         assert!(form_message.contains("content-type: application/x-www-form-urlencoded"));
-        assert!(form_message.ends_with("name=Mini+Postman"));
+        assert!(form_message.ends_with("name=Dispatch"));
 
         let (url, received) = capture_one_request();
         let mut binary_request = request(url, "POST", RequestBodyType::Binary);

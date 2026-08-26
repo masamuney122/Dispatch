@@ -40,16 +40,15 @@ const MenuItem = ({
   <div style={{ padding: '2px 6px' }}>
     <button
       onClick={onClick}
-      className={`w-full flex items-center justify-between text-left rounded-md transition-colors hover:bg-zinc-800`}
+      className={`w-full flex items-center justify-between text-left rounded-md transition-colors hover:bg-zinc-800 ${danger ? "text-red-400" : "text-zinc-200"}`}
       style={{
         fontSize: '13px',
         padding: '6px 12px',
-        color: danger ? '#f87171' : '#e4e4e4',
       }}
     >
       <span>{children}</span>
       {(shortcutText || shortcutIcon) && (
-        <span style={{ color: '#888888', fontFamily: 'sans-serif', letterSpacing: '0.025em' }} className="flex items-center">
+        <span style={{ fontFamily: 'sans-serif', letterSpacing: '0.025em' }} className="flex items-center text-[#888888]">
           {shortcutText}
           {shortcutIcon}
         </span>
@@ -107,14 +106,12 @@ export const FolderContextMenu: React.FC<FolderContextMenuProps> = ({
   return (
     <div
       ref={menuRef}
-      className="fixed z-[200] rounded-lg shadow-2xl"
+      className="fixed z-[200] rounded-lg border border-[#383838] bg-[#242424] shadow-2xl"
       style={{ 
         left: clampedX, 
         top: clampedY,
         width: '170px',
         padding: '6px 0',
-        backgroundColor: '#242424',
-        border: '1px solid #383838'
       }}
     >
       <MenuItem onClick={handle(onAddRequest)}>

@@ -1,7 +1,7 @@
 
 
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useState } from "react";
+import { platformCapabilities, startWindowDrag } from "../../services/platformService";
 import type { ArchiveMode } from "../../types/workspace";
 
 interface TopNavbarProps {
@@ -11,8 +11,6 @@ interface TopNavbarProps {
   onExportWorkspace: (mode: ArchiveMode) => Promise<void>;
   searchQuery: string;
   onSearchChange: (query: string) => void;
-  onClearHistory: () => void;
-  historyCount: number;
   onOpenSettings: () => void;
 }
 
@@ -23,8 +21,6 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
   onExportWorkspace,
   searchQuery,
   onSearchChange,
-  onClearHistory,
-  historyCount,
   onOpenSettings,
 }) => {
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
@@ -34,9 +30,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
     const target = event.target as HTMLElement;
     if (target.closest("input, button, select, textarea, a")) return;
 
-    void getCurrentWindow().startDragging().catch(() => {
-      // Browser preview does not expose a native Tauri window.
-    });
+    if (platformCapabilities.nativeWindow) void startWindowDrag().catch(() => undefined);
   };
 
   return (
@@ -44,11 +38,11 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
       data-tauri-drag-region
       onPointerDown={handleWindowDrag}
       className="relative h-[32px] bg-[#252525] border-b border-[#363636] flex items-center justify-between shrink-0 gap-4 select-none text-sm font-sans"
-      style={{ paddingLeft: "88px", paddingRight: "16px" }}
+      style={{ paddingLeft: platformCapabilities.desktop ? "88px" : "8px", paddingRight: "16px" }}
     >
       {/* macOS window controls için boş ve sürüklenebilir alan */}
       <div className="relative flex min-w-0 items-center gap-2">
-        <div data-tauri-drag-region className="w-[8px] shrink-0" />
+        {platformCapabilities.desktop && <div data-tauri-drag-region className="w-[8px] shrink-0" />}
         <button
           onClick={() => setWorkspaceMenuOpen((open) => !open)}
           className="flex max-w-[220px] items-center gap-1.5 truncate rounded px-2 py-0.5 text-xs font-medium text-zinc-400 transition hover:bg-[#333] hover:text-zinc-100"
@@ -69,19 +63,23 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
             >
               OpenAPI içe aktar
             </button>
-            <div className="my-1 border-t border-[#414141]" />
-            <button
-              onClick={() => void onExportWorkspace("backup").finally(() => setWorkspaceMenuOpen(false))}
-              className="w-full rounded px-3 py-2 text-left text-xs text-zinc-300 hover:bg-[#383838]"
-            >
-              Backup olarak dışa aktar
-            </button>
-            <button
-              onClick={() => void onExportWorkspace("safe_share").finally(() => setWorkspaceMenuOpen(false))}
-              className="w-full rounded px-3 py-2 text-left text-xs text-zinc-300 hover:bg-[#383838]"
-            >
-              Safe Share olarak dışa aktar
-            </button>
+            {platformCapabilities.workspaceArchive && (
+              <>
+                <div className="my-1 border-t border-[#414141]" />
+                <button
+                  onClick={() => void onExportWorkspace("backup").finally(() => setWorkspaceMenuOpen(false))}
+                  className="w-full rounded px-3 py-2 text-left text-xs text-zinc-300 hover:bg-[#383838]"
+                >
+                  Backup olarak dışa aktar
+                </button>
+                <button
+                  onClick={() => void onExportWorkspace("safe_share").finally(() => setWorkspaceMenuOpen(false))}
+                  className="w-full rounded px-3 py-2 text-left text-xs text-zinc-300 hover:bg-[#383838]"
+                >
+                  Safe Share olarak dışa aktar
+                </button>
+              </>
+            )}
             <div className="my-1 border-t border-[#414141]" />
             <button
               onClick={() =>
@@ -127,17 +125,13 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
         </div>
       </div>
 
-      {/* Sağ: Clear History ve Ayarlar */}
+      {/* Sağ: Marka ve Ayarlar */}
       <div className="flex items-center gap-3 shrink-0">
-        {historyCount > 0 && (
-          <button
-            onClick={onClearHistory}
-            className="text-zinc-400 hover:text-red-400 font-medium text-xs transition-colors"
-            title="Clear History"
-          >
-            Clear History ({historyCount})
-          </button>
-        )}
+        <img
+          src={`${import.meta.env.BASE_URL}branding/yapi-kredi-logo.png`}
+          alt="Yapı Kredi"
+          className="pointer-events-none h-8 w-auto max-w-[96px] object-contain"
+        />
 
         <button className="p-1 hover:text-zinc-200 text-zinc-400" title="Notifications">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -29,7 +29,8 @@ log = "0.4"
 tauri = { version = "2.11.3", features = [] }
 tauri-plugin-log = "2"
 
-reqwest = { version = "0.12", features = ["json", "multipart", "gzip", "brotli", "deflate", "zstd"] }
+reqwest = { version = "0.12", features = ["json", "multipart", "gzip", "brotli", "deflate", "zstd", "cookies"] }
+cookie_store = "0.21"
 base64 = "0.22"
 sha2 = "0.10"
 url = "2.5"
@@ -38,3 +39,4 @@ uuid = { version = "1", features = ["v4"] }
 tauri-plugin-dialog = "2"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 serde_norway = "0.9"
+dispatch-web-core = { path = "../rust/dispatch-web-core" }

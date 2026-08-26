@@ -1,8 +1,8 @@
 import { useEffect } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ApiClientLayout } from "./components/ApiClientLayout";
 import { WorkspaceLauncher } from "./components/workspace/WorkspaceLauncher";
 import { useWorkspaceSession } from "./hooks/useWorkspaceSession";
+import { initializePlatform } from "./services/platformService";
 
 function App() {
   const {
@@ -18,9 +18,7 @@ function App() {
   } = useWorkspaceSession();
 
   useEffect(() => {
-    const win = getCurrentWindow();
-    win.center().catch(console.error);
-    win.maximize().catch(console.error);
+    void initializePlatform();
   }, []);
 
   if (loading) {

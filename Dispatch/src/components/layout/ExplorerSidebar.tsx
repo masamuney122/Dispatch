@@ -52,6 +52,7 @@ interface ExplorerSidebarProps {
   selectedSavedRequestId: string | null;
   history: HistoryItem[];
   onSelectHistory: (item: HistoryItem) => void;
+  onClearHistory: () => void;
   selectedHistoryId: string | null;
   environments: Environment[];
   activeEnvironmentId: string | null;
@@ -180,6 +181,7 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
   selectedSavedRequestId,
   history,
   onSelectHistory,
+  onClearHistory,
   selectedHistoryId,
   environments,
   activeEnvironmentId,
@@ -218,6 +220,20 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
   // ── Create root folder ─────────────────────────────────────────────────────
   const [creatingFolderInCollectionId, setCreatingFolderInCollectionId] = useState<string | null>(null);
   const [newFolderName, setNewFolderName] = useState("");
+  const newRootFolderFormRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    if (creatingFolderInCollectionId === null) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (newRootFolderFormRef.current?.contains(event.target as Node)) return;
+      setCreatingFolderInCollectionId(null);
+      setNewFolderName("");
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [creatingFolderInCollectionId]);
 
   // ── Delete confirmation ────────────────────────────────────────────────────
   const [deleteConfirm, setDeleteConfirm] = useState<{
@@ -804,6 +820,7 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
                                 {/* Inline root-folder creation */}
                                 {creatingFolderInCollectionId === collection.id && (
                                   <form
+                                    ref={newRootFolderFormRef}
                                     onSubmit={(e) => void handleCreateRootFolder(e, collection.id)}
                                     className="flex gap-1.5 items-center px-1 py-1 mb-1"
                                   >
@@ -812,7 +829,10 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
                                       value={newFolderName}
                                       onChange={(e) => setNewFolderName(e.target.value)}
                                       onKeyDown={(e) => {
-                                        if (e.key === "Escape") setCreatingFolderInCollectionId(null);
+                                        if (e.key === "Escape") {
+                                          setCreatingFolderInCollectionId(null);
+                                          setNewFolderName("");
+                                        }
                                       }}
                                       placeholder="Folder name"
                                       className="flex-1 min-w-0 bg-[#292929] border border-[#404040] rounded text-xs text-zinc-100 focus:outline-none focus:border-[#555] px-2 py-1"
@@ -882,9 +902,19 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
 
         {/* ── History mode ──────────────────────────────────────────────────── */}
         {mode === "history" && (
-          <div className="flex-1" style={{ padding: '12px' }}>
-            <div className="text-zinc-300 font-bold text-xs tracking-wider select-none pl-2" style={{ paddingBottom: '6px' }}>
-              REQUEST HISTORY
+          <div className="flex-1" style={{ padding: '6px' }}>
+            <div className="mb-[1px] flex items-center justify-between gap-3 select-none text-[11px] font-bold tracking-wider text-zinc-300">
+              <span>REQUEST HISTORY</span>
+              {history.length > 0 && (
+                <button
+                  type="button"
+                  onClick={onClearHistory}
+                  className="shrink-0 rounded p-1 text-[10px] font-semibold normal-case tracking-normal text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                  title="Clear History"
+                >
+                  Clear History
+                </button>
+              )}
             </div>
             {filteredHistory.length === 0 ? (
               <div className="text-center text-zinc-500 text-xs py-6">
@@ -904,10 +934,12 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
                   (groups[g] ??= []).push(item);
                 });
 
-                return Object.entries(groups).map(([label, items]) => {
-                  const expanded = openHistoryDateGroups[label] !== false;
-                  return (
-                    <div key={label} style={{ marginBottom: '12px' }}>
+                return (
+                  <div className="mt-0.5 pl-1">
+                    {Object.entries(groups).map(([label, items]) => {
+                      const expanded = openHistoryDateGroups[label] !== false;
+                      return (
+                    <div key={label} className="mb-0.5">
                       <div
                         onClick={() =>
                           setOpenHistoryDateGroups((prev) => ({
@@ -915,7 +947,7 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
                             [label]: prev[label] === undefined ? false : !prev[label],
                           }))
                         }
-                        className="flex items-center gap-2 text-zinc-300 font-semibold text-xs cursor-pointer hover:text-white select-none px-2 py-1"
+                        className="flex min-h-[24px] cursor-pointer select-none items-center gap-1 rounded-md px-1 text-xs font-medium text-zinc-300 hover:bg-[#252525] hover:text-white"
                       >
                         <svg
                           className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${expanded ? "rotate-90" : ""}`}
@@ -927,9 +959,9 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
                       </div>
 
                       {expanded && (
-                        <div className="relative mt-0.5">
+                        <div className="relative">
                           {/* Vertical guide line */}
-                          <div className="absolute left-[15px] top-0 bottom-1 w-[1px] bg-[#2e2e2e]" />
+                          <div className="absolute bottom-0 left-[10px] top-0 w-px bg-[#2e2e2e]" />
 
                           {items.map((item) => {
                             const isSel = selectedHistoryId === item.id;
@@ -942,11 +974,11 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
                                   event.stopPropagation();
                                   setHistoryContextMenu({ id: item.id, x: event.clientX, y: event.clientY });
                                 }}
-                                className={`group relative z-10 w-full flex min-h-[26px] items-center justify-between rounded-md text-left cursor-pointer transition-colors ${isSel
+                                className={`group relative z-10 flex min-h-[23px] w-full cursor-pointer items-center justify-between gap-1 rounded-md text-left transition-colors ${isSel
                                   ? "bg-[#333333] text-white"
                                   : "text-zinc-300 hover:bg-[#252525]"
                                   }`}
-                                style={{ paddingLeft: '32px', paddingRight: '8px' }}
+                                style={{ paddingLeft: '22px', paddingRight: '6px' }}
                               >
                                 <div className="flex items-center gap-2 min-w-0 flex-1">
                                   <MethodBadge method={item.method} compact />
@@ -976,8 +1008,10 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
                         </div>
                       )}
                     </div>
-                  );
-                });
+                      );
+                    })}
+                  </div>
+                );
               })()
             )}
           </div>

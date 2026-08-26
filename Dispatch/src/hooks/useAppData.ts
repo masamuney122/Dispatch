@@ -7,6 +7,7 @@ import {
   createCollection,
   deleteCollection,
   listCollections,
+  renameCollection,
   createFolder,
   renameFolder,
   deleteFolder,
@@ -83,7 +84,7 @@ export function useAppData() {
         setActiveEnvironmentId(activeEnv ? activeEnv.id : null);
         setCollections(collectionList || []);
       } catch (err) {
-        console.error("Failed to load initial data from Tauri backend:", err);
+        console.error("Failed to load initial platform data:", err);
       }
     };
     fetchInitialData();
@@ -113,7 +114,6 @@ export function useAppData() {
   };
 
   const handleRenameCollection = async (id: string, name: string) => {
-    const { renameCollection } = await import("../services/collectionService");
     await renameCollection(id, name);
     setCollections((current) =>
       current.map((c) => (c.id === id ? { ...c, name } : c))

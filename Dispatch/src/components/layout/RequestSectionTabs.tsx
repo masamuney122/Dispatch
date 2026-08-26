@@ -3,12 +3,14 @@
 interface RequestSectionTabsProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
+  onOpenCookies: () => void;
   headersCount?: number;
 }
 
 export const RequestSectionTabs: React.FC<RequestSectionTabsProps> = ({
   activeTab,
   onTabChange,
+  onOpenCookies,
   headersCount = 6,
 }) => {
   const tabs = ["Params", "Authorization", "Headers", "Body", "Scripts", "Settings"];
@@ -21,7 +23,7 @@ export const RequestSectionTabs: React.FC<RequestSectionTabsProps> = ({
           <button
             key={tab}
             onClick={() => onTabChange(tab)}
-            className={`flex items-center gap-1.5 px-3 py-2 font-medium transition-colors border-b-2 ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 font-medium transition-colors border-b-2 ${
               activeTab === tab
                 ? "border-[#ff6c37] text-white font-bold"
                 : "border-transparent text-zinc-400 hover:text-zinc-200"
@@ -36,8 +38,8 @@ export const RequestSectionTabs: React.FC<RequestSectionTabsProps> = ({
       </div>
 
       {/* Sağ: Cookies */}
-      <div className="py-1.5">
-        <button className="text-sky-400 hover:underline font-semibold text-xs transition-colors">
+      <div className="py-1">
+        <button onClick={onOpenCookies} className="text-sky-400 hover:underline font-semibold text-xs transition-colors">
           Cookies
         </button>
       </div>

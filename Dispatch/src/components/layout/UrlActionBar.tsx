@@ -4,7 +4,7 @@ import { getMethodHexColor } from "../../constants/httpConstants";
 interface UrlActionBarProps {
   method: string;
   title: string;
-  collectionName?: string;
+  breadcrumbItems?: string[];
   onChangeTitle?: (title: string) => void;
   onChangeMethod: (method: string) => void;
   url: string;
@@ -19,7 +19,7 @@ interface UrlActionBarProps {
 export const UrlActionBar: React.FC<UrlActionBarProps> = ({
   method,
   title,
-  collectionName,
+  breadcrumbItems = [],
   onChangeTitle,
   onChangeMethod,
   url,
@@ -54,18 +54,23 @@ export const UrlActionBar: React.FC<UrlActionBarProps> = ({
   };
 
   return (
-    <div className="flex flex-col gap-3 font-sans select-none shrink-0">
+    <div className="flex flex-col gap-2 font-sans select-none shrink-0">
       {/* Üst Sıra: Başlık ve Sağ Aksiyon Butonları (Save v, Share, Link) */}
       <div className="flex items-center justify-between text-xs">
-        <div className="flex items-center gap-2 text-zinc-100 font-bold">
-          {collectionName && (
-            <>
-              <span className="text-sm font-semibold tracking-wide text-zinc-400 truncate max-w-[200px]">{collectionName}</span>
-              <svg className="w-3.5 h-3.5 text-zinc-500 mx-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="flex items-center gap-1.5 text-zinc-100 font-bold">
+          {breadcrumbItems.map((item, index) => (
+            <React.Fragment key={`${item}-${index}`}>
+              <span
+                className="max-w-[180px] truncate text-xs font-semibold tracking-wide text-zinc-400"
+                title={item}
+              >
+                {item}
+              </span>
+              <svg className="mx-0.5 h-3 w-3 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
-            </>
-          )}
+            </React.Fragment>
+          ))}
           {isEditingTitle ? (
             <input
               autoFocus
@@ -73,7 +78,7 @@ export const UrlActionBar: React.FC<UrlActionBarProps> = ({
               onChange={(e) => setEditTitle(e.target.value)}
               onBlur={commitTitleChange}
               onKeyDown={handleTitleKeyDown}
-              className="text-sm font-semibold tracking-wide text-zinc-100 bg-transparent border-b border-[#637083] outline-none max-w-[320px] px-1 py-0.5"
+              className="max-w-[320px] border-b border-[#637083] bg-transparent px-1 py-0.5 text-xs font-semibold tracking-wide text-zinc-100 outline-none"
             />
           ) : (
             <span
@@ -83,7 +88,7 @@ export const UrlActionBar: React.FC<UrlActionBarProps> = ({
                   setIsEditingTitle(true);
                 }
               }}
-              className={`text-sm font-semibold tracking-wide text-zinc-100 truncate max-w-[320px] ${onChangeTitle ? 'cursor-text hover:bg-[#2a2a2a] px-1 rounded transition-colors' : ''}`}
+              className={`max-w-[320px] truncate text-xs font-semibold tracking-wide text-zinc-100 ${onChangeTitle ? 'cursor-text hover:bg-[#2a2a2a] px-1 rounded transition-colors' : ''}`}
               title={onChangeTitle ? "Click to rename" : ""}
             >
               {title}

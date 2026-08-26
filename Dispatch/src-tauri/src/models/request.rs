@@ -11,6 +11,20 @@ pub enum HttpVersionPreference {
     Http2,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CookieCredentials {
+    Omit,
+    SameOrigin,
+    Include,
+}
+
+impl Default for CookieCredentials {
+    fn default() -> Self {
+        Self::SameOrigin
+    }
+}
+
 impl Default for HttpVersionPreference {
     fn default() -> Self {
         Self::Auto
@@ -30,6 +44,8 @@ pub struct RequestHttpSettings {
     pub remove_referer_on_redirect: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_redirects: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cookie_credentials: Option<CookieCredentials>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

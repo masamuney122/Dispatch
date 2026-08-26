@@ -1,5 +1,6 @@
 pub mod archive_command;
 pub mod collection_command;
+pub mod cookie_command;
 pub mod environment_command;
 pub mod history_command;
 pub mod oauth_command;

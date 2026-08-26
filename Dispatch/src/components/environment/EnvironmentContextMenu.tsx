@@ -29,8 +29,7 @@ const MenuItem = ({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center justify-between rounded-md px-3 py-1.5 text-left text-[13px] transition-colors hover:bg-zinc-800"
-      style={{ color: danger ? "#f87171" : "#e4e4e4" }}
+      className={`flex w-full items-center justify-between rounded-md px-3 py-1.5 text-left text-[13px] transition-colors hover:bg-zinc-800 ${danger ? "text-red-400" : "text-zinc-200"}`}
     >
       <span>{children}</span>
       {shortcut && <span className="flex items-center font-sans tracking-wide text-[#888888]">{shortcut}</span>}
