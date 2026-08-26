@@ -24,10 +24,10 @@
 
 Dispatch; Postman benzeri bir çalışma deneyimini, kullanıcının verilerini kendi seçtiği klasörde tutan taşınabilir bir workspace modeliyle birleştiren API istemcisidir.
 
-Proje iki ayrı istemci içerir:
+Proje tek codebase'den iki çalışma hedefi üretir:
 
-- **Dispatch Desktop:** React arayüzü, Tauri kabuğu ve Rust servisleriyle çalışan masaüstü uygulaması.
-- **Dispatch Web:** Aynı workspace biçimini Chromium tabanlı tarayıcılarda açabilen, React + Rust/WebAssembly tabanlı PWA.
+- **Dispatch Desktop:** Ortak React arayüzünü Tauri kabuğu ve Rust servisleriyle çalıştırır.
+- **Dispatch Web:** Aynı React arayüzünü browser adapter'ları ve Rust/WebAssembly ile Chromium tabanlı tarayıcılarda çalıştırır.
 
 Ayrı bir uygulama backend'i yoktur. Collection, environment ve workspace bilgileri kullanıcının cihazında saklanır. Desktop sürümü HTTP isteklerini Rust `reqwest` üzerinden, web sürümü ise tarayıcının `fetch` API'si üzerinden gönderir.
 
@@ -85,7 +85,7 @@ flowchart TB
     WEB_FS --> WORKSPACE
 ```
 
-Desktop ve web uygulamaları bağımsız olarak geliştirilip dağıtılır. Birbirlerinin build sürecine bağlı değildirler; ortak noktaları klasörde saklanan **workspace veri sözleşmesidir**.
+Desktop ve web aynı frontend, hook, tip ve UI component'lerini paylaşır. Build sırasında platform adapter'ı seçilir; iki hedef bağımsız artifact olarak dağıtılır ve aynı **workspace veri sözleşmesini** kullanır.
 
 ### Request akışı
 
@@ -149,15 +149,11 @@ Desktop uygulaması bir workspace'i tek bir `.dispatch` dosyasında paketleyebil
 
 ```text
 Root/
-├── Dispatch/              # Tauri desktop uygulaması
-│   ├── src/               # React + TypeScript frontend
-│   ├── src-tauri/         # Rust command, model ve service katmanları
-│   └── docs/              # Workspace mimarisi dokümanları
-├── Dispatch-Web/          # Chromium PWA
-│   ├── src/               # React frontend ve browser adapter'ları
-│   ├── wasm-core/         # Rust/WebAssembly iş mantığı
-│   └── docs/              # Web mimarisi dokümanları
-├── Spare-Frontend/        # Önceki web arayüzünün yedek kopyası
+├── Dispatch/              # Tek web + desktop codebase
+│   ├── src/               # Ortak React UI ve platform adapter'ları
+│   ├── rust/              # WebAssembly core ve wrapper
+│   ├── src-tauri/         # Native Rust command, model ve servisler
+│   └── docs/              # Workspace ve birleşik mimari dokümanları
 ├── TestBackend/           # Yerel geliştirme ve HTTP test servisi
 └── storefront-sample.yaml # OpenAPI import örneği
 ```
@@ -171,7 +167,7 @@ Root/
 - Desktop geliştirme için [Tauri sistem gereksinimleri](https://v2.tauri.app/start/prerequisites/)
 - WebAssembly build'i için `wasm-pack`
 
-### Dispatch Desktop
+### Dispatch
 
 ```bash
 cd Dispatch
@@ -185,21 +181,19 @@ Production build:
 npm run tauri build
 ```
 
-### Dispatch Web
+Web geliştirme:
 
 ```bash
 rustup target add wasm32-unknown-unknown
 cargo install wasm-pack
-
-cd Dispatch-Web
-npm install
-npm run dev
+cd Dispatch
+npm run dev:web
 ```
 
 Production build:
 
 ```bash
-npm run build
+npm run build:web
 ```
 
 ## Uygulamayı kullanma
