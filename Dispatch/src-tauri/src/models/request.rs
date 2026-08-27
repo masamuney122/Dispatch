@@ -75,6 +75,14 @@ pub struct BinaryBody {
     pub data_base64: String,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RequestScripts {
+    #[serde(default)]
+    pub pre_request: String,
+    #[serde(default)]
+    pub post_response: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiRequest {
     pub method: String,
@@ -92,16 +100,32 @@ pub struct ApiRequest {
     pub auth: Option<AuthConfig>,
     #[serde(default)]
     pub settings: RequestHttpSettings,
+    #[serde(default)]
+    pub scripts: RequestScripts,
 }
 
 #[cfg(test)]
 mod tests {
-    use super::RequestHttpSettings;
+    use super::{ApiRequest, RequestHttpSettings};
 
     #[test]
     fn empty_request_settings_serialize_without_null_overrides() {
         let value =
             serde_json::to_value(RequestHttpSettings::default()).expect("serialize settings");
         assert_eq!(value, serde_json::json!({}));
+    }
+
+    #[test]
+    fn requests_saved_before_scripts_deserialize_with_empty_scripts() {
+        let request: ApiRequest = serde_json::from_value(serde_json::json!({
+            "method": "GET",
+            "url": "https://example.com",
+            "body": "",
+            "headers": {}
+        }))
+        .expect("deserialize legacy request");
+
+        assert!(request.scripts.pre_request.is_empty());
+        assert!(request.scripts.post_response.is_empty());
     }
 }

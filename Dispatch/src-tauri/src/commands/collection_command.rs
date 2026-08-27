@@ -412,6 +412,7 @@ pub fn create_request_in_collection(
             headers: Default::default(),
             auth: None,
             settings: Default::default(),
+            scripts: Default::default(),
         },
         folder_id,
         order: sibling_max_order + 1,

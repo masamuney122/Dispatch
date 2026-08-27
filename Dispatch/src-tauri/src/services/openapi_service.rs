@@ -611,6 +611,7 @@ fn convert_operation(
         headers,
         auth,
         settings: Default::default(),
+        scripts: Default::default(),
     }
 }
 
@@ -1452,6 +1453,7 @@ mod tests {
                 headers: HashMap::new(),
                 auth: None,
                 settings: Default::default(),
+                scripts: Default::default(),
             },
             folder_id: Some(folder_id.to_string()),
             order,

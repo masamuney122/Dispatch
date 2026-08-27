@@ -18,6 +18,7 @@ import { OverlayScrollArea } from "./common/OverlayScrollArea";
 import { RequestHttpSettingsEditor } from "./settings/HttpSettingsEditor";
 import { GlobalSettingsDialog } from "./settings/GlobalSettingsDialog";
 import { CookieManagerDialog } from "./cookies/CookieManagerDialog";
+import { ScriptsEditor } from "./scripts/ScriptsEditor";
 
 import { useRequestTabs } from "../hooks/useRequestTabs";
 import { useAppData } from "../hooks/useAppData";
@@ -41,7 +42,9 @@ import { flushWorkspaceChanges } from "../services/workspaceLifecycle";
 import { exportCollectionOpenApi, importOpenApi, inspectOpenApi } from "../services/openApiService";
 import { loadGlobalHttpSettings, saveGlobalHttpSettings } from "../services/httpSettingsService";
 import { platformCapabilities } from "../services/platformService";
+import { executeRequestScript } from "../services/scriptService";
 import { DEFAULT_HTTP_SETTINGS, type GlobalHttpSettings, type RequestHttpSettings } from "../types/httpSettings";
+import { EMPTY_REQUEST_SCRIPTS, type ScriptExecutionReport } from "../types/script";
 
 const RESPONSE_PANEL_DEFAULT_HEIGHT = 320;
 const RESPONSE_PANEL_MIN_HEIGHT = 220;
@@ -104,6 +107,7 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
     handleCreateEnvironment,
     refreshEnvironments,
     handleUpdateEnvironment,
+    handleCommitEnvironment,
     handleDeleteEnvironment,
     handleSelectEnvironment,
   } = useAppData();
@@ -184,6 +188,7 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
         headers: headersRecord,
         auth: activeTab.auth,
         settings: activeTab.settings,
+        scripts: activeTab.scripts,
       } satisfies ApiRequest,
       queryParams: activeTab.queryParams.map(({ key, value }) => ({
         key,
@@ -213,16 +218,42 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
   // ── Event Handlers ──
 
   const handleSendRequest = async () => {
-    updateActiveTab({ loading: true, error: null, selectedSavedRequestId: null });
+    updateActiveTab({ loading: true, error: null, selectedSavedRequestId: null, scriptReports: [] });
     const originalRequest = createRequestPayload();
+    const scriptReports: ScriptExecutionReport[] = [];
 
     try {
       const activeEnvironment = environments.find(
         (environment) => environment.id === activeEnvironmentId
       );
+      let runtimeRequest = originalRequest;
+      let runtimeVariables = { ...(activeEnvironment?.variables || {}) };
+
+      const preResult = await executeRequestScript({
+        phase: "pre-request",
+        source: activeTab.scripts.pre_request,
+        request: runtimeRequest,
+        environment: runtimeVariables,
+        hasActiveEnvironment: Boolean(activeEnvironment),
+      });
+      scriptReports.push(preResult.report);
+      updateActiveTab({ scriptReports: [...scriptReports] });
+      if (preResult.report.status === "failed") {
+        throw new Error(`Pre-request script failed: ${preResult.report.error || "Unknown error"}`);
+      }
+      runtimeRequest = preResult.request;
+      runtimeVariables = preResult.environment;
+      if (activeEnvironment && preResult.environment_mutations.length > 0) {
+        await handleCommitEnvironment(
+          activeEnvironment.id,
+          activeEnvironment.name,
+          runtimeVariables
+        );
+      }
+
       const resolvedTemplate = resolveRequestVariables(
-        createRequestTemplate(),
-        activeEnvironment?.variables || {}
+        { request: runtimeRequest, queryParams: [] },
+        runtimeVariables
       );
       const resolvedRequest: ApiRequest = {
         ...resolvedTemplate.request,
@@ -232,7 +263,35 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
         ),
       };
       const res = await sendRequest(resolvedRequest);
-      updateActiveTab({ response: res, loading: false });
+
+      const postResult = await executeRequestScript({
+        phase: "post-response",
+        source: activeTab.scripts.post_response,
+        request: resolvedRequest,
+        response: res,
+        environment: runtimeVariables,
+        hasActiveEnvironment: Boolean(activeEnvironment),
+      });
+      scriptReports.push(postResult.report);
+      if (
+        postResult.report.status === "passed" &&
+        activeEnvironment &&
+        postResult.environment_mutations.length > 0
+      ) {
+        try {
+          await handleCommitEnvironment(
+            activeEnvironment.id,
+            activeEnvironment.name,
+            postResult.environment
+          );
+        } catch (commitError) {
+          postResult.report.status = "failed";
+          postResult.report.error = `Environment changes could not be saved: ${
+            commitError instanceof Error ? commitError.message : String(commitError)
+          }`;
+        }
+      }
+      updateActiveTab({ response: res, loading: false, scriptReports: [...scriptReports] });
 
       const newItem: HistoryItem = {
         id: crypto.randomUUID(),
@@ -257,7 +316,7 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
             ? err
             : JSON.stringify(err);
 
-      updateActiveTab({ error: errMsg, response: null, loading: false });
+      updateActiveTab({ error: errMsg, response: null, loading: false, scriptReports: [...scriptReports] });
 
       if (err instanceof VariableResolutionError) return;
 
@@ -300,6 +359,8 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
       queryParams: parsedParams,
       auth: item.auth || { type: "None" },
       settings: {},
+      scripts: { ...EMPTY_REQUEST_SCRIPTS },
+      scriptReports: [],
       selectedHistoryId: item.id,
       selectedSavedRequestId: null,
       isDirty: false,
@@ -320,6 +381,8 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
       headers: Object.entries(item.request.headers).map(([key, value]) => ({ key, value })),
       auth: item.request.auth || { type: "None" },
       settings: item.request.settings || {},
+      scripts: { ...EMPTY_REQUEST_SCRIPTS, ...(item.request.scripts || {}) },
+      scriptReports: [],
       response: null,
       error: null,
       selectedHistoryId: null,
@@ -868,6 +931,12 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
                         method={activeTab.method}
                       />
                     )}
+                    {activeTab.activeSectionTab === "Scripts" && (
+                      <ScriptsEditor
+                        value={activeTab.scripts}
+                        onChange={(scripts) => updateActiveTab({ scripts })}
+                      />
+                    )}
                     {activeTab.activeSectionTab === "Settings" && (
                       <RequestHttpSettingsEditor
                         value={activeTab.settings}
@@ -908,6 +977,7 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
                       response={activeTab.response}
                       loading={activeTab.loading}
                       error={activeTab.error}
+                      scriptReports={activeTab.scriptReports}
                     />
                   </div>
                 </div>

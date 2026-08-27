@@ -1,5 +1,6 @@
 import type { AuthConfig } from "./auth";
 import type { RequestHttpSettings } from "./httpSettings";
+import type { RequestScripts } from "./script";
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
 
@@ -36,4 +37,5 @@ export interface ApiRequest {
   headers: Record<string, string>;
   auth?: AuthConfig;
   settings?: RequestHttpSettings;
+  scripts?: RequestScripts;
 }

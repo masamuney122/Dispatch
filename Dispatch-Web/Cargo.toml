@@ -1,7 +1,0 @@
-[workspace]
-members = [
-  "rust/dispatch-web-core",
-  "rust/dispatch-web-wasm",
-]
-resolver = "2"
-

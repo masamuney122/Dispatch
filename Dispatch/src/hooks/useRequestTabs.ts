@@ -41,6 +41,7 @@ export function useRequestTabs() {
       "binary",
       "auth",
       "settings",
+      "scripts",
     ];
     const marksDirty = editableKeys.some((key) => key in updates);
     setTabs((prevTabs) =>

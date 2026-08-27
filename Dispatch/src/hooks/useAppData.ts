@@ -323,6 +323,37 @@ export function useAppData() {
     );
   };
 
+  const handleCommitEnvironment = async (
+    id: string,
+    name: string,
+    variables: Record<string, string>
+  ) => {
+    const pendingTimer = environmentSaveTimers.current.get(id);
+    if (pendingTimer) clearTimeout(pendingTimer);
+    environmentSaveTimers.current.delete(id);
+    const saveVersion = (environmentSaveVersions.current.get(id) || 0) + 1;
+    environmentSaveVersions.current.set(id, saveVersion);
+
+    try {
+      const saved = await updateEnvironment(id, name, variables);
+      pendingEnvironmentDrafts.current.delete(id);
+      setEnvironments((current) =>
+        current.map((environment) =>
+          environment.id === saved.id ? saved : environment
+        )
+      );
+      setEnvironmentError(null);
+      return saved;
+    } catch (error) {
+      setEnvironmentError(
+        error instanceof Error
+          ? error.message
+          : "Environment changes could not be saved."
+      );
+      throw error;
+    }
+  };
+
   const handleDeleteEnvironment = async (id: string) => {
     const pendingTimer = environmentSaveTimers.current.get(id);
     if (pendingTimer) {
@@ -369,6 +400,7 @@ export function useAppData() {
     handleCreateEnvironment,
     refreshEnvironments,
     handleUpdateEnvironment,
+    handleCommitEnvironment,
     handleDeleteEnvironment,
     handleSelectEnvironment,
   };

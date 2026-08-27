@@ -2,6 +2,7 @@ import type { HttpMethod, RequestSectionTab, BinaryBody, BodyField, RequestBodyT
 import type { ApiResponse } from "./response";
 import type { AuthConfig } from "./auth";
 import type { RequestHttpSettings } from "./httpSettings";
+import { EMPTY_REQUEST_SCRIPTS, type RequestScripts, type ScriptExecutionReport } from "./script";
 
 export interface QueryParamItem {
   key: string;
@@ -33,6 +34,8 @@ export interface RequestTabState {
   binary?: BinaryBody;
   auth: AuthConfig;
   settings: RequestHttpSettings;
+  scripts: RequestScripts;
+  scriptReports: ScriptExecutionReport[];
   activeSectionTab: RequestSectionTab;
   response: ApiResponse | null;
   loading: boolean;
@@ -73,6 +76,8 @@ export const createDefaultTab = (index: number = 1): RequestTabState => ({
   formFields: [],
   auth: { type: "None" },
   settings: {},
+  scripts: { ...EMPTY_REQUEST_SCRIPTS },
+  scriptReports: [],
   activeSectionTab: "Params",
   response: null,
   loading: false,

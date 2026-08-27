@@ -29,6 +29,68 @@ body {
   color: #d4d4d8;
 }
 
+.dispatch-script-editor {
+  --dispatch-script-text: #e8e6e1;
+  --dispatch-script-keyword: #c792ea;
+  --dispatch-script-operator: #ff5c8a;
+  --dispatch-script-string: #e6d85f;
+  --dispatch-script-number: #b8d982;
+  --dispatch-script-literal: #82aaff;
+  --dispatch-script-definition: #9cdcfe;
+  --dispatch-script-property: #e8e6e1;
+  --dispatch-script-function: #5fd7e5;
+  --dispatch-script-comment: #737373;
+  --dispatch-script-regexp: #f29e74;
+  --dispatch-script-punctuation: #c9c6bf;
+  --dispatch-script-invalid: #ff6b78;
+}
+
+.dispatch-script-editor .cm-selectionBackground,
+.dispatch-script-editor.cm-focused .cm-selectionBackground {
+  background-color: rgba(91, 105, 130, 0.22) !important;
+}
+
+.dispatch-script-editor .cm-content ::selection {
+  background-color: transparent !important;
+  color: inherit !important;
+}
+
+html[data-theme="light"] .dispatch-script-editor .cm-gutters {
+  color: #94a5b4;
+  border-right-color: #d6e1ea;
+}
+
+html[data-theme="light"] .dispatch-script-editor {
+  --dispatch-script-text: #243746;
+  --dispatch-script-keyword: #7a3e9d;
+  --dispatch-script-operator: #c42b64;
+  --dispatch-script-string: #8a6d00;
+  --dispatch-script-number: #527a20;
+  --dispatch-script-literal: #2456a6;
+  --dispatch-script-definition: #006b8f;
+  --dispatch-script-property: #334f63;
+  --dispatch-script-function: #007c91;
+  --dispatch-script-comment: #71818d;
+  --dispatch-script-regexp: #a84b20;
+  --dispatch-script-punctuation: #526775;
+  --dispatch-script-invalid: #c51f3a;
+}
+
+html[data-theme="light"] .dispatch-script-editor .cm-selectionBackground,
+html[data-theme="light"] .dispatch-script-editor.cm-focused .cm-selectionBackground {
+  background-color: rgba(0, 92, 169, 0.16) !important;
+}
+
+html[data-theme="light"] .dispatch-script-editor .cm-content ::selection {
+  background-color: transparent !important;
+  color: inherit !important;
+}
+
+html[data-theme="light"] .dispatch-script-editor .cm-activeLine,
+html[data-theme="light"] .dispatch-script-editor .cm-activeLineGutter {
+  background-color: rgba(0, 92, 169, 0.045);
+}
+
 /* Native scrollbars are hidden inside shared overlay scroll surfaces. */
 .overlay-scroll-viewport {
   scrollbar-width: none;

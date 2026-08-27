@@ -19,7 +19,7 @@ const ChevronIcon = ({ expanded }: { expanded: boolean }) => (
 
 const FolderIcon = ({ open }: { open: boolean }) => (
   <svg
-    className="w-3.5 h-3.5 shrink-0 text-amber-400/80"
+    className="w-3.5 h-3.5 shrink-0 text-zinc-500"
     fill={open ? "currentColor" : "none"}
     viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}
   >

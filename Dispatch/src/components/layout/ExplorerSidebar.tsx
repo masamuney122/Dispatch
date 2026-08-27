@@ -113,7 +113,7 @@ const DragPreview: React.FC<{ label: string; isFolder: boolean; method?: string 
 }) => (
   <div className="flex items-center gap-2 rounded-md bg-[#2a2a2a] border border-[#444] px-3 py-2 shadow-xl text-xs text-zinc-200 opacity-90 max-w-[220px]">
     {isFolder ? (
-      <svg className="w-3.5 h-3.5 shrink-0 text-amber-400/80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <svg className="w-3.5 h-3.5 shrink-0 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 7a2 2 0 012-2h4l2 2h7a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
       </svg>
     ) : (

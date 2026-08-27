@@ -315,6 +315,7 @@ mod tests {
             headers: HashMap::new(),
             auth: None,
             settings: Default::default(),
+            scripts: Default::default(),
         }
     }
 

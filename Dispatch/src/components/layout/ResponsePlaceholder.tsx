@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { ApiResponse } from "../../types/response";
+import type { ScriptExecutionReport } from "../../types/script";
 import { ResponseBodyView, type ResponseBodyMode } from "../response/ResponseBodyView";
 import { STATUS_TEXT, formatSize, getHeader, getResponseBodyKind, getStatusStyle, responseKindLabel } from "../../utils/responseUtils";
 import { OverlayScrollArea } from "../common/OverlayScrollArea";
@@ -8,9 +9,10 @@ interface ResponsePlaceholderProps {
   response: ApiResponse | null;
   loading: boolean;
   error: string | null;
+  scriptReports: ScriptExecutionReport[];
 }
 
-type ResponseSection = "body" | "cookies" | "headers";
+type ResponseSection = "body" | "cookies" | "headers" | "tests" | "console";
 const getErrorHelpText = (error: string) => {
   const normalized = error.toLowerCase();
   if (normalized.includes("refused") || normalized.includes("error sending request")) {
@@ -28,7 +30,7 @@ const getErrorHelpText = (error: string) => {
   return "Review the request details and try sending it again.";
 };
 
-export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ response, loading, error }) => {
+export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ response, loading, error, scriptReports }) => {
   const [section, setSection] = useState<ResponseSection>("body");
   const [bodyMode, setBodyMode] = useState<ResponseBodyMode>("pretty");
 
@@ -59,11 +61,26 @@ export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ respon
     ? bodyMode
     : bodyModes[0]?.key || "pretty";
 
+  const scriptTests = useMemo(
+    () => scriptReports.flatMap((report) =>
+      report.tests.map((test) => ({ ...test, phase: report.phase }))
+    ),
+    [scriptReports]
+  );
+  const scriptLogs = useMemo(
+    () => scriptReports.flatMap((report) =>
+      report.logs.map((log) => ({ ...log, phase: report.phase }))
+    ),
+    [scriptReports]
+  );
+  const scriptFailures = scriptReports.filter((report) => report.status === "failed");
+
   const sectionTabs: { key: ResponseSection; label: string; suffix?: React.ReactNode }[] = [
     { key: "body", label: "Body" },
     { key: "cookies", label: "Cookies", suffix: response?.cookies?.length ? <span className="ml-0.5 font-mono text-[10px] text-zinc-500">{response.cookies.length}</span> : undefined },
     { key: "headers", label: "Headers", suffix: <span className="ml-0.5 font-mono text-[10px] text-zinc-500">{responseData?.headers.length || 0}</span> },
-
+    { key: "tests", label: "Tests", suffix: scriptTests.length ? <span className="ml-0.5 font-mono text-[10px] text-zinc-500">{scriptTests.length}</span> : undefined },
+    { key: "console", label: "Console", suffix: scriptLogs.length ? <span className="ml-0.5 font-mono text-[10px] text-zinc-500">{scriptLogs.length}</span> : undefined },
   ];
 
   return (
@@ -117,7 +134,7 @@ export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ respon
       )}
 
       {/* Error state */}
-      {!loading && error && (
+      {!loading && error && !["tests", "console"].includes(section) && (
         <OverlayScrollArea
           containerClassName="flex-1 min-h-0"
           axis="vertical"
@@ -180,7 +197,7 @@ export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ respon
       )}
 
       {/* Loaded Response Content */}
-      {!loading && !error && response && responseData && (
+      {!loading && response && responseData && !["tests", "console"].includes(section) && (
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           {section === "body" && (
             <>
@@ -277,8 +294,55 @@ export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ respon
         </div>
       )}
 
+      {!loading && section === "tests" && (
+        <OverlayScrollArea containerClassName="flex-1 min-h-0" axis="vertical" className="overflow-y-auto">
+          <div className="space-y-2 px-12 py-4 text-xs">
+            {scriptFailures.map((report) => (
+              <div key={`${report.phase}:${report.error}`} className="rounded-lg border border-rose-900/60 bg-rose-950/20 px-3 py-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-semibold text-rose-300">{report.phase === "pre-request" ? "Pre-request" : "Post-response"} script failed</span>
+                  <span className="font-mono text-[10px] text-zinc-600">{report.duration_ms} ms</span>
+                </div>
+                <p className="mt-1.5 whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-rose-200/70 select-text">{report.error}</p>
+              </div>
+            ))}
+            {scriptTests.map((test, index) => (
+              <div key={`${test.phase}:${test.name}:${index}`} className="flex items-start gap-3 rounded-md border border-[#343434] bg-[#202020] px-3 py-2.5">
+                <span className={`mt-0.5 font-bold ${test.passed ? "text-emerald-400" : "text-rose-400"}`}>{test.passed ? "✓" : "×"}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-zinc-300">{test.name}</span>
+                    <span className="rounded bg-[#2c2c2c] px-1.5 py-0.5 font-mono text-[9px] text-zinc-500">{test.phase}</span>
+                  </div>
+                  {test.error && <p className="mt-1 whitespace-pre-wrap break-words font-mono text-[11px] leading-4 text-rose-300/70 select-text">{test.error}</p>}
+                </div>
+              </div>
+            ))}
+            {scriptFailures.length === 0 && scriptTests.length === 0 && (
+              <div className="flex h-28 items-center justify-center text-zinc-500">No script tests were recorded.</div>
+            )}
+          </div>
+        </OverlayScrollArea>
+      )}
+
+      {!loading && section === "console" && (
+        <OverlayScrollArea containerClassName="flex-1 min-h-0" axis="vertical" className="overflow-y-auto">
+          <div className="px-12 py-4 font-mono text-[11px] leading-5 select-text">
+            {scriptLogs.map((log, index) => (
+              <div key={`${log.phase}:${index}`} className="flex gap-3 border-b border-[#2e2e2e] py-1.5 last:border-b-0">
+                <span className="w-24 shrink-0 text-[9px] text-zinc-600">{log.phase}</span>
+                <span className={log.level === "error" ? "text-rose-300" : log.level === "warn" ? "text-amber-300" : log.level === "info" ? "text-sky-300" : "text-zinc-300"}>{log.message}</span>
+              </div>
+            ))}
+            {scriptLogs.length === 0 && (
+              <div className="flex h-28 items-center justify-center font-sans text-xs text-zinc-500">No console output.</div>
+            )}
+          </div>
+        </OverlayScrollArea>
+      )}
+
       {/* No response yet */}
-      {!loading && !error && !response && (
+      {!loading && !error && !response && !["tests", "console"].includes(section) && (
         <OverlayScrollArea
           containerClassName="flex-1 min-h-0"
           axis="vertical"
