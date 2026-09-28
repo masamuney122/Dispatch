@@ -71,7 +71,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "cookie_store 0.21.1",
- "dispatch-web-core",
+ "dispatch-core",
  "log",
  "reqwest 0.12.28",
  "serde",
@@ -713,13 +713,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "dispatch-web-core"
+name = "dispatch-core"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "serde",
  "serde_json",
  "serde_norway",
  "thiserror 2.0.18",
+ "url",
 ]
 
 [[package]]

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
-use cookie_store::{CookieDomain, CookieExpiration, CookieStore};
+use cookie_store::CookieStore;
 use reqwest::cookie::CookieStore as ReqwestCookieStore;
 use reqwest::header::HeaderValue;
 use url::Url;
@@ -10,6 +10,13 @@ use url::Url;
 use crate::models::cookie::{CookieJarDocument, CookieKey, StoredCookie};
 use crate::models::workspace::WorkspaceSession;
 use crate::services::storage_service::{read_json, write_json_atomic};
+
+mod record;
+
+use record::{
+    from_store_cookie, header as cookie_header, id as cookie_id, is_expired, normalize,
+    normalize_domain, normalize_path, origin as cookie_origin, signature as cookie_signature,
+};
 
 pub const COOKIES_FILE: &str = "cookies.json";
 
@@ -58,7 +65,7 @@ impl ManagedCookieJar {
         let store = self.store.read().map_err(|error| error.to_string())?;
         let mut cookies = store
             .iter_unexpired()
-            .map(|cookie| stored_cookie(cookie, true))
+            .map(|cookie| from_store_cookie(cookie, true))
             .collect::<Vec<_>>();
         drop(store);
         cookies.extend(
@@ -108,7 +115,7 @@ impl ManagedCookieJar {
         previous: Option<&CookieKey>,
         mut cookie: StoredCookie,
     ) -> Result<(), String> {
-        normalize_cookie(&mut cookie)?;
+        normalize(&mut cookie)?;
         if let Some(previous) = previous {
             self.remove(previous)?;
         } else {
@@ -169,7 +176,7 @@ impl ManagedCookieJar {
             return Ok(());
         }
         let origin = cookie_origin(cookie)?;
-        let raw = cookie_header(cookie)?;
+        let raw = cookie_header(cookie);
         self.store
             .write()
             .map_err(|error| error.to_string())?
@@ -191,7 +198,7 @@ impl ReqwestCookieStore for ManagedCookieJar {
             let Ok(parsed) = cookie_store::Cookie::parse(value.to_string(), url) else {
                 continue;
             };
-            let record = stored_cookie(&parsed, false);
+            let record = from_store_cookie(&parsed, false);
             if let Some(index) = disabled
                 .iter()
                 .position(|cookie| cookie.key() == record.key())
@@ -266,127 +273,23 @@ pub fn create_empty_cookie_jar(root: &Path) -> Result<(), String> {
     )
 }
 
-fn stored_cookie(cookie: &cookie_store::Cookie<'_>, enabled: bool) -> StoredCookie {
-    let same_site = cookie
-        .same_site()
-        .map(|value| format!("{value:?}").to_ascii_lowercase());
-    StoredCookie {
-        name: cookie.name().to_string(),
-        value: cookie.value().to_string(),
-        domain: cookie.domain.as_cow().unwrap_or_default().into_owned(),
-        path: cookie.path.as_ref().to_string(),
-        expires_at: match cookie.expires {
-            CookieExpiration::AtUtc(value) => Some(value.unix_timestamp()),
-            CookieExpiration::SessionEnd => None,
-        },
-        secure: cookie.secure().unwrap_or(false),
-        http_only: cookie.http_only().unwrap_or(false),
-        same_site,
-        host_only: matches!(cookie.domain, CookieDomain::HostOnly(_)),
-        enabled,
-    }
-}
-
-fn normalize_cookie(cookie: &mut StoredCookie) -> Result<(), String> {
-    cookie.name = cookie.name.trim().to_string();
-    cookie.domain = normalize_domain(&cookie.domain);
-    cookie.path = normalize_path(&cookie.path).to_string();
-    cookie.same_site = cookie.same_site.as_deref().and_then(normalize_same_site);
-    if cookie.name.is_empty()
-        || cookie.name.contains([';', '=', '\r', '\n'])
-        || cookie.value.contains(['\r', '\n'])
-    {
-        return Err("Cookie name or value is invalid".to_string());
-    }
-    if cookie.domain.is_empty() || cookie.domain.contains(['/', '\r', '\n']) {
-        return Err("Cookie domain is invalid".to_string());
-    }
-    if !cookie.path.starts_with('/') {
-        return Err("Cookie path must start with '/'".to_string());
-    }
-    Ok(())
-}
-
-fn cookie_origin(cookie: &StoredCookie) -> Result<Url, String> {
-    let scheme = if cookie.secure { "https" } else { "http" };
-    Url::parse(&format!("{scheme}://{}{}", cookie.domain, cookie.path))
-        .map_err(|error| format!("Cookie domain or path is invalid: {error}"))
-}
-
-fn cookie_header(cookie: &StoredCookie) -> Result<String, String> {
-    let mut parts = vec![format!("{}={}", cookie.name, cookie.value)];
-    if !cookie.host_only {
-        parts.push(format!("Domain={}", cookie.domain));
-    }
-    parts.push(format!("Path={}", cookie.path));
-    if let Some(expires_at) = cookie.expires_at {
-        let max_age = expires_at.saturating_sub(chrono::Utc::now().timestamp());
-        parts.push(format!("Max-Age={max_age}"));
-    }
-    if cookie.secure {
-        parts.push("Secure".to_string());
-    }
-    if cookie.http_only {
-        parts.push("HttpOnly".to_string());
-    }
-    if let Some(same_site) = cookie.same_site.as_deref() {
-        parts.push(format!("SameSite={same_site}"));
-    }
-    Ok(parts.join("; "))
-}
-
-fn normalize_domain(value: &str) -> String {
-    value.trim().trim_start_matches('.').to_ascii_lowercase()
-}
-
-fn normalize_path(value: &str) -> &str {
-    let value = value.trim();
-    if value.is_empty() {
-        "/"
-    } else {
-        value
-    }
-}
-
-fn normalize_same_site(value: &str) -> Option<String> {
-    match value.trim().to_ascii_lowercase().as_str() {
-        "strict" => Some("strict".to_string()),
-        "lax" => Some("lax".to_string()),
-        "none" => Some("none".to_string()),
-        _ => None,
-    }
-}
-
-fn is_expired(cookie: &StoredCookie) -> bool {
-    cookie
-        .expires_at
-        .is_some_and(|expires_at| expires_at <= chrono::Utc::now().timestamp())
-}
-
-fn cookie_id(key: &CookieKey) -> String {
-    format!(
-        "{}\n{}\n{}",
-        normalize_domain(&key.domain),
-        key.path,
-        key.name
-    )
-}
-
-fn cookie_signature(cookie: &StoredCookie) -> String {
-    format!(
-        "{}\n{:?}\n{}\n{}\n{:?}\n{}",
-        cookie.value,
-        cookie.expires_at,
-        cookie.secure,
-        cookie.http_only,
-        cookie.same_site,
-        cookie.host_only
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn capture(jar: &ManagedCookieJar, url: &str, headers: &[&str]) {
+        let values = headers
+            .iter()
+            .map(|value| HeaderValue::from_str(value).unwrap())
+            .collect::<Vec<_>>();
+        let mut values = values.iter();
+        ReqwestCookieStore::set_cookies(jar, &mut values, &Url::parse(url).unwrap());
+    }
+
+    fn request_cookie(jar: &ManagedCookieJar, url: &str) -> Option<String> {
+        ReqwestCookieStore::cookies(jar, &Url::parse(url).unwrap())
+            .and_then(|value| value.to_str().ok().map(str::to_string))
+    }
 
     fn sample_cookie() -> StoredCookie {
         StoredCookie {
@@ -434,5 +337,116 @@ mod tests {
         assert!(!cookies[0].enabled);
         assert_eq!(cookies[0].same_site.as_deref(), Some("lax"));
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn captures_replaces_and_deletes_response_cookies() {
+        let jar = ManagedCookieJar::default();
+        capture(
+            &jar,
+            "http://api.example.test/login",
+            &["session=old; Path=/; HttpOnly; SameSite=Lax"],
+        );
+        assert_eq!(
+            request_cookie(&jar, "http://api.example.test/users").as_deref(),
+            Some("session=old")
+        );
+
+        capture(
+            &jar,
+            "http://api.example.test/login",
+            &["session=new; Path=/; HttpOnly; SameSite=Lax"],
+        );
+        assert_eq!(
+            request_cookie(&jar, "http://api.example.test/users").as_deref(),
+            Some("session=new")
+        );
+        assert_eq!(jar.list().unwrap().len(), 1);
+
+        capture(
+            &jar,
+            "http://api.example.test/logout",
+            &["session=; Path=/; Max-Age=0"],
+        );
+        assert!(request_cookie(&jar, "http://api.example.test/users").is_none());
+        assert!(jar.list().unwrap().is_empty());
+    }
+
+    #[test]
+    fn respects_host_only_domain_path_boundary_and_secure_rules() {
+        let jar = ManagedCookieJar::default();
+        capture(
+            &jar,
+            "https://api.example.test/api/login",
+            &[
+                "host_only=1; Path=/",
+                "shared=1; Domain=example.test; Path=/",
+                "scoped=1; Path=/api",
+                "secure_only=1; Path=/; Secure",
+            ],
+        );
+
+        let exact_https = request_cookie(&jar, "https://api.example.test/api/users").unwrap();
+        assert!(exact_https.contains("host_only=1"));
+        assert!(exact_https.contains("shared=1"));
+        assert!(exact_https.contains("scoped=1"));
+        assert!(exact_https.contains("secure_only=1"));
+
+        let sibling = request_cookie(&jar, "https://sub.example.test/api/users").unwrap();
+        assert!(!sibling.contains("host_only=1"));
+        assert!(sibling.contains("shared=1"));
+        assert!(!sibling.contains("scoped=1"));
+        assert!(!sibling.contains("secure_only=1"));
+
+        let path_boundary = request_cookie(&jar, "https://api.example.test/apix").unwrap();
+        assert!(!path_boundary.contains("scoped=1"));
+
+        let insecure = request_cookie(&jar, "http://api.example.test/api/users").unwrap();
+        assert!(!insecure.contains("secure_only=1"));
+    }
+
+    #[test]
+    fn captures_multiple_set_cookie_headers_and_keeps_path_variants() {
+        let jar = ManagedCookieJar::default();
+        capture(
+            &jar,
+            "http://example.test/api/login",
+            &[
+                "session=root; Path=/",
+                "session=api; Path=/api",
+                "theme=dark; Path=/",
+            ],
+        );
+
+        let root = request_cookie(&jar, "http://example.test/home").unwrap();
+        assert!(root.contains("session=root"));
+        assert!(!root.contains("session=api"));
+        assert!(root.contains("theme=dark"));
+
+        let api = request_cookie(&jar, "http://example.test/api/users").unwrap();
+        assert!(api.contains("session=api"));
+        assert!(api.contains("session=root"));
+        assert!(api.contains("theme=dark"));
+        assert_eq!(jar.list().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn clear_removes_enabled_and_disabled_cookies() {
+        let jar = ManagedCookieJar::default();
+        capture(
+            &jar,
+            "http://example.test/",
+            &["enabled=1; Path=/", "disabled=1; Path=/"],
+        );
+        let disabled = jar
+            .list()
+            .unwrap()
+            .into_iter()
+            .find(|cookie| cookie.name == "disabled")
+            .unwrap();
+        jar.set_enabled(&disabled.key(), false).unwrap();
+        jar.clear().unwrap();
+        assert!(jar.list().unwrap().is_empty());
+        assert!(request_cookie(&jar, "http://example.test/").is_none());
     }
 }

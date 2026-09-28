@@ -1,4 +1,4 @@
-use crate::models::auth::AuthConfig;
+use dispatch_core::AuthConfig;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

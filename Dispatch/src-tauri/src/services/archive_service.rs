@@ -1,43 +1,28 @@
-use std::collections::{BTreeMap, HashSet};
-use std::fs::{self, File};
-use std::io::{Read, Write};
+use std::collections::BTreeMap;
+use std::fs;
 use std::path::Path;
-
-use sha2::{Digest, Sha256};
-use zip::write::SimpleFileOptions;
-use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 use crate::models::archive::{
     ArchiveManifest, ArchiveMode, ArchivePreview, ARCHIVE_FORMAT, ARCHIVE_VERSION,
 };
-use crate::models::cookie::CookieJarDocument;
 use crate::models::workspace::{
-    CollectionsDocument, EnvironmentsDocument, WorkspaceManifest, WorkspaceSession,
-    COLLECTIONS_FILE, ENVIRONMENTS_FILE, WORKSPACE_FORMAT, WORKSPACE_MANIFEST_FILE,
-    WORKSPACE_SCHEMA_VERSION,
+    CollectionsDocument, EnvironmentsDocument, WorkspaceSession, COLLECTIONS_FILE,
+    ENVIRONMENTS_FILE, WORKSPACE_MANIFEST_FILE, WORKSPACE_SCHEMA_VERSION,
 };
-use crate::services::storage_service::{read_json, replace_file_atomic, write_json_atomic};
-use crate::services::workspace_service;
 use crate::services::cookie_service::COOKIES_FILE;
+use crate::services::storage_service::{read_json, write_json_atomic};
+use crate::services::workspace_service;
 
-const MAX_ARCHIVE_ENTRIES: usize = 1_000;
-const MAX_ENTRY_SIZE: u64 = 20 * 1024 * 1024;
-const MAX_TOTAL_SIZE: u64 = 100 * 1024 * 1024;
-const ARCHIVE_MANIFEST_PATH: &str = "archive.json";
-const WORKSPACE_MANIFEST_PATH: &str = "workspace/dispatch.workspace.json";
-const COLLECTIONS_PATH: &str = "workspace/collections.json";
-const ENVIRONMENTS_PATH: &str = "workspace/environments.json";
-const COOKIES_PATH: &str = "workspace/cookies.json";
-const ASSETS_PREFIX: &str = "workspace/assets/";
+mod format;
+mod reader;
+mod writer;
 
-struct ParsedArchive {
-    manifest: ArchiveManifest,
-    workspace: WorkspaceManifest,
-    collections: CollectionsDocument,
-    environments: EnvironmentsDocument,
-    cookies: Option<CookieJarDocument>,
-    assets: BTreeMap<String, Vec<u8>>,
-}
+use format::{
+    checksum, COLLECTIONS_PATH, COOKIES_PATH, ENVIRONMENTS_PATH, MAX_ARCHIVE_ENTRIES,
+    MAX_ENTRY_SIZE, MAX_TOTAL_SIZE, WORKSPACE_MANIFEST_PATH,
+};
+use reader::parse_archive;
+use writer::{collect_assets, read_file_limited, write_archive};
 
 pub fn export_workspace(
     session: &WorkspaceSession,
@@ -107,7 +92,7 @@ pub fn export_workspace(
 
     let checksums = files
         .iter()
-        .map(|(path, bytes)| (path.clone(), sha256(bytes)))
+        .map(|(path, bytes)| (path.clone(), checksum(bytes)))
         .collect();
     let archive_manifest = ArchiveManifest {
         format: ARCHIVE_FORMAT.to_string(),
@@ -120,35 +105,7 @@ pub fn export_workspace(
     let archive_manifest_bytes = serde_json::to_vec_pretty(&archive_manifest)
         .map_err(|error| format!("Failed to serialize archive manifest: {error}"))?;
 
-    let temp_path = parent.join(format!(
-        ".{}.{}.tmp",
-        destination
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("workspace.dispatch"),
-        uuid::Uuid::new_v4()
-    ));
-
-    let result = (|| -> Result<(), String> {
-        let file = File::create(&temp_path)
-            .map_err(|error| format!("Failed to create export archive: {error}"))?;
-        let mut writer = ZipWriter::new(file);
-        write_archive_entry(&mut writer, ARCHIVE_MANIFEST_PATH, &archive_manifest_bytes)?;
-        for (path, bytes) in &files {
-            write_archive_entry(&mut writer, path, bytes)?;
-        }
-        let file = writer
-            .finish()
-            .map_err(|error| format!("Failed to finish export archive: {error}"))?;
-        file.sync_all()
-            .map_err(|error| format!("Failed to sync export archive: {error}"))?;
-        replace_file_atomic(&temp_path, destination, "Dispatch archive")
-    })();
-
-    if result.is_err() && temp_path.exists() {
-        let _ = fs::remove_file(temp_path);
-    }
-    result
+    write_archive(destination, &archive_manifest_bytes, &files)
 }
 
 pub fn inspect_archive(path: &Path) -> Result<ArchivePreview, String> {
@@ -209,11 +166,7 @@ pub fn import_archive(
             "imported environments document",
         )?;
         if let Some(cookies) = parsed.cookies {
-            write_json_atomic(
-                &staging.join(COOKIES_FILE),
-                &cookies,
-                "imported cookie jar",
-            )?;
+            write_json_atomic(&staging.join(COOKIES_FILE), &cookies, "imported cookie jar")?;
         }
 
         for (relative_path, bytes) in parsed.assets {
@@ -236,241 +189,6 @@ pub fn import_archive(
         let _ = fs::remove_dir_all(&staging);
     }
     result
-}
-
-fn parse_archive(path: &Path) -> Result<ParsedArchive, String> {
-    let file =
-        File::open(path).map_err(|error| format!("Failed to open Dispatch archive: {error}"))?;
-    let mut archive =
-        ZipArchive::new(file).map_err(|error| format!("Invalid Dispatch ZIP archive: {error}"))?;
-    if archive.len() > MAX_ARCHIVE_ENTRIES {
-        return Err("Archive contains too many entries".to_string());
-    }
-
-    let mut files = BTreeMap::<String, Vec<u8>>::new();
-    let mut total_size = 0_u64;
-    for index in 0..archive.len() {
-        let entry = archive
-            .by_index(index)
-            .map_err(|error| format!("Failed to read archive entry: {error}"))?;
-        let name = entry.name().to_string();
-        validate_archive_path(&name)?;
-        if entry.is_dir() {
-            if name != "workspace/" && name != ASSETS_PREFIX {
-                return Err(format!("Unexpected archive directory: {name}"));
-            }
-            continue;
-        }
-        if let Some(mode) = entry.unix_mode() {
-            if mode & 0o170000 == 0o120000 {
-                return Err(format!(
-                    "Symbolic links are not allowed in archives: {name}"
-                ));
-            }
-        }
-        if !is_allowed_archive_file(&name) {
-            return Err(format!("Unexpected archive entry: {name}"));
-        }
-        if entry.size() > MAX_ENTRY_SIZE {
-            return Err(format!("Archive entry is too large: {name}"));
-        }
-        total_size = total_size.saturating_add(entry.size());
-        if total_size > MAX_TOTAL_SIZE {
-            return Err("Archive uncompressed size exceeds the limit".to_string());
-        }
-
-        let mut bytes = Vec::with_capacity(entry.size() as usize);
-        entry
-            .take(MAX_ENTRY_SIZE + 1)
-            .read_to_end(&mut bytes)
-            .map_err(|error| format!("Failed to read archive entry {name}: {error}"))?;
-        if bytes.len() as u64 > MAX_ENTRY_SIZE {
-            return Err(format!(
-                "Archive entry expanded beyond its size limit: {name}"
-            ));
-        }
-        if files.insert(name.clone(), bytes).is_some() {
-            return Err(format!("Archive contains a duplicate entry: {name}"));
-        }
-    }
-
-    let archive_manifest: ArchiveManifest = parse_required(&files, ARCHIVE_MANIFEST_PATH)?;
-    if archive_manifest.format != ARCHIVE_FORMAT
-        || archive_manifest.archive_version != ARCHIVE_VERSION
-    {
-        return Err("Unsupported Dispatch archive format or version".to_string());
-    }
-
-    let content_paths: HashSet<&String> = files
-        .keys()
-        .filter(|path| path.as_str() != ARCHIVE_MANIFEST_PATH)
-        .collect();
-    let checksum_paths: HashSet<&String> = archive_manifest.checksums.keys().collect();
-    if content_paths != checksum_paths {
-        return Err("Archive checksum list does not match its contents".to_string());
-    }
-    for (entry_path, expected) in &archive_manifest.checksums {
-        let actual = sha256(
-            files
-                .get(entry_path)
-                .ok_or_else(|| format!("Missing checksummed entry: {entry_path}"))?,
-        );
-        if &actual != expected {
-            return Err(format!("Checksum mismatch for archive entry: {entry_path}"));
-        }
-    }
-
-    let workspace: WorkspaceManifest = parse_required(&files, WORKSPACE_MANIFEST_PATH)?;
-    if workspace.format != WORKSPACE_FORMAT
-        || workspace.schema_version != WORKSPACE_SCHEMA_VERSION
-        || workspace.id != archive_manifest.workspace_id
-    {
-        return Err("Archive contains an invalid workspace manifest".to_string());
-    }
-    let collections: CollectionsDocument = parse_required(&files, COLLECTIONS_PATH)?;
-    let environments: EnvironmentsDocument = parse_required(&files, ENVIRONMENTS_PATH)?;
-    if collections.schema_version != WORKSPACE_SCHEMA_VERSION
-        || environments.schema_version != WORKSPACE_SCHEMA_VERSION
-        || collections.workspace_id != workspace.id
-        || environments.workspace_id != workspace.id
-    {
-        return Err("Archive workspace documents are inconsistent".to_string());
-    }
-    let cookies = files
-        .get(COOKIES_PATH)
-        .map(|bytes| {
-            let document: CookieJarDocument = serde_json::from_slice(bytes)
-                .map_err(|error| format!("Invalid {COOKIES_PATH}: {error}"))?;
-            if document.schema_version != 1 {
-                return Err("Archive contains an unsupported cookie jar".to_string());
-            }
-            Ok(document)
-        })
-        .transpose()?;
-
-    let assets = files
-        .into_iter()
-        .filter_map(|(path, bytes)| {
-            path.strip_prefix(ASSETS_PREFIX)
-                .filter(|relative| !relative.is_empty())
-                .map(|relative| (relative.to_string(), bytes))
-        })
-        .collect();
-
-    Ok(ParsedArchive {
-        manifest: archive_manifest,
-        workspace,
-        collections,
-        environments,
-        cookies,
-        assets,
-    })
-}
-
-fn collect_assets(root: &Path, files: &mut BTreeMap<String, Vec<u8>>) -> Result<(), String> {
-    if !root.exists() {
-        return Ok(());
-    }
-    collect_assets_recursive(root, root, files)
-}
-
-fn collect_assets_recursive(
-    root: &Path,
-    directory: &Path,
-    files: &mut BTreeMap<String, Vec<u8>>,
-) -> Result<(), String> {
-    for entry in fs::read_dir(directory)
-        .map_err(|error| format!("Failed to read assets directory: {error}"))?
-    {
-        let entry = entry.map_err(|error| format!("Failed to inspect asset: {error}"))?;
-        let path = entry.path();
-        let metadata = fs::symlink_metadata(&path)
-            .map_err(|error| format!("Failed to inspect asset metadata: {error}"))?;
-        if metadata.file_type().is_symlink() {
-            return Err(format!(
-                "Workspace assets cannot contain symlinks: {}",
-                path.display()
-            ));
-        }
-        if metadata.is_dir() {
-            collect_assets_recursive(root, &path, files)?;
-        } else if metadata.is_file() {
-            let relative = path
-                .strip_prefix(root)
-                .map_err(|error| format!("Failed to resolve asset path: {error}"))?;
-            let relative = relative
-                .to_str()
-                .ok_or_else(|| "Asset paths must be valid UTF-8".to_string())?
-                .replace('\\', "/");
-            let archive_path = format!("{ASSETS_PREFIX}{relative}");
-            files.insert(archive_path, read_file_limited(&path, MAX_ENTRY_SIZE)?);
-        }
-    }
-    Ok(())
-}
-
-fn write_archive_entry(
-    writer: &mut ZipWriter<File>,
-    path: &str,
-    bytes: &[u8],
-) -> Result<(), String> {
-    let options = SimpleFileOptions::default()
-        .compression_method(CompressionMethod::Deflated)
-        .unix_permissions(0o644);
-    writer
-        .start_file(path, options)
-        .map_err(|error| format!("Failed to add {path} to archive: {error}"))?;
-    writer
-        .write_all(bytes)
-        .map_err(|error| format!("Failed to write {path} to archive: {error}"))
-}
-
-fn read_file_limited(path: &Path, limit: u64) -> Result<Vec<u8>, String> {
-    let metadata = fs::metadata(path)
-        .map_err(|error| format!("Failed to inspect {}: {error}", path.display()))?;
-    if metadata.len() > limit {
-        return Err(format!("File exceeds size limit: {}", path.display()));
-    }
-    fs::read(path).map_err(|error| format!("Failed to read {}: {error}", path.display()))
-}
-
-fn parse_required<T: serde::de::DeserializeOwned>(
-    files: &BTreeMap<String, Vec<u8>>,
-    path: &str,
-) -> Result<T, String> {
-    let bytes = files
-        .get(path)
-        .ok_or_else(|| format!("Archive is missing required entry: {path}"))?;
-    serde_json::from_slice(bytes).map_err(|error| format!("Invalid {path}: {error}"))
-}
-
-fn validate_archive_path(path: &str) -> Result<(), String> {
-    if path.is_empty()
-        || path.starts_with('/')
-        || path.starts_with('\\')
-        || path.contains('\\')
-        || path
-            .split('/')
-            .any(|component| component == ".." || component == ".")
-    {
-        return Err(format!("Unsafe archive path: {path}"));
-    }
-    Ok(())
-}
-
-fn is_allowed_archive_file(path: &str) -> bool {
-    matches!(
-        path,
-        ARCHIVE_MANIFEST_PATH
-            | WORKSPACE_MANIFEST_PATH
-            | COLLECTIONS_PATH
-            | ENVIRONMENTS_PATH
-            | COOKIES_PATH
-    ) || path.starts_with(ASSETS_PREFIX)
-}
-
-fn sha256(bytes: &[u8]) -> String {
-    format!("sha256:{:x}", Sha256::digest(bytes))
 }
 
 #[cfg(test)]

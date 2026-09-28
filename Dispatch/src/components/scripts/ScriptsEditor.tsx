@@ -42,7 +42,7 @@ export const ScriptsEditor: React.FC<ScriptsEditorProps> = ({ value, onChange })
         </div>
         <span className="pr-1 text-[10px] text-zinc-600">JavaScript · 1 s limit · dp.* / pm.* compatible subset</span>
       </div>
-      <div className="relative ml-[-32px] min-h-0 w-[calc(100%+32px)] flex-1 bg-transparent">
+      <div className="relative ml-[-24px] min-h-0 w-[calc(100%+24px)] flex-1 bg-transparent">
         <ScriptEditor
           key={section}
           ariaLabel={`${section === "pre_request" ? "Pre-request" : "Post-response"} script editor`}

@@ -49,7 +49,9 @@ export interface OpenApiExportOptions {
 }
 
 export interface OpenApiExportResult {
+  request_count: number;
   endpoint_count: number;
+  grouped_request_count: number;
   warnings: OpenApiWarning[];
   cancelled?: boolean;
 }

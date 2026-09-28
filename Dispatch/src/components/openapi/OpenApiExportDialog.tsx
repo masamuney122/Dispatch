@@ -28,9 +28,11 @@ export function OpenApiExportDialog({ collection, submitting, error, onClose, on
             <option value="json">JSON</option>
           </select>
         </Field>
-        <Field label="Server URL"><input value={serverUrl} onChange={(event) => setServerUrl(event.target.value)} placeholder="https://api.example.com (opsiyonel)" className={inputClass} /></Field>
+        <Field label="Server URL override"><input value={serverUrl} onChange={(event) => setServerUrl(event.target.value)} placeholder="Boşsa request URL'lerinden otomatik algılanır" className={inputClass} /></Field>
       </div>
-      <p className="mt-4 text-[11px] leading-4 text-zinc-500">Secret değerler dışa aktarılmaz. Response şemaları bulunmadığı için her operation varsayılan bir 200 response içerir.</p>
+      <p className="mt-4 text-[11px] leading-4 text-zinc-500">
+        Domainler request URL'lerinden operation bazında algılanır. Aynı method/path kullanan requestler OpenAPI örnekleri olarak gruplanır ve raporlanır. Scriptler OpenAPI standardında bulunmadığı için taşınmaz. Secret değerler dışa aktarılmaz; response şeması olmayan operation'lar varsayılan 200 response kullanır.
+      </p>
       {error && <p className="mt-4 rounded-lg border border-red-900/60 bg-red-950/20 p-3 text-xs text-red-300">{error}</p>}
       <div className="mt-5 flex justify-end gap-2">
         <SecondaryButton onClick={onClose} disabled={submitting}>İptal</SecondaryButton>

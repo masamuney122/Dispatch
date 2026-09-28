@@ -1,4 +1,4 @@
-import { validateWorkspace } from "../../services/wasmClient";
+import { createWorkspaceBundle, validateWorkspace } from "../../services/wasmClient";
 import type {
   CollectionsDocument,
   EnvironmentsDocument,
@@ -89,36 +89,7 @@ export async function createWorkspaceDirectory(
 
   const now = new Date().toISOString();
   const workspaceId = crypto.randomUUID();
-  const bundle: WorkspaceBundle = {
-    manifest: {
-      format: "dispatch-workspace",
-      schema_version: 1,
-      id: workspaceId,
-      name,
-      created_at: now,
-      updated_at: now,
-    },
-    collections: {
-      schema_version: 1,
-      workspace_id: workspaceId,
-      revision: 0,
-      updated_at: now,
-      collections: [],
-    },
-    environments: {
-      schema_version: 1,
-      workspace_id: workspaceId,
-      revision: 0,
-      updated_at: now,
-      environments: [],
-    },
-  };
-
-  await validateWorkspace(
-    JSON.stringify(bundle.manifest),
-    JSON.stringify(bundle.collections),
-    JSON.stringify(bundle.environments),
-  );
+  const bundle: WorkspaceBundle = await createWorkspaceBundle(name, workspaceId, now);
   await Promise.all([
     writeJsonFile(directory, MANIFEST_FILE, bundle.manifest),
     writeJsonFile(directory, COLLECTIONS_FILE, bundle.collections),

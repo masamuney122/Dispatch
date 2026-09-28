@@ -28,40 +28,51 @@ The project has one shared React frontend and two platform implementations selec
 - **`hooks/`**: Custom React hooks.
   - `useRequestTabs.ts`: Manages the state of currently open request tabs.
   - `useAppData.ts`: Manages the global state for history, collections, and environments.
+  - `useRequestExecution.ts`: Owns the request lifecycle (scripts, variable resolution, send, history).
+  - `useResizablePanels.ts`: Owns pointer state and dimensions for the sidebar and response panel.
+  - `useExplorerDragDrop.ts`: Owns collection-tree drag/drop, auto-scroll, and auto-expand behavior.
+- **UI composition rule**: Layout components compose features; they must not accumulate transport,
+  persistence, or complex pointer workflows. Prefer a focused hook for a stateful workflow, a child
+  component for an independently rendered panel, and a utility for deterministic transformations.
+  `RequestHistoryPanel.tsx` is the reference boundary for extracting a self-contained sidebar mode.
 - **`services/`**: Platform-neutral facades imported by the shared UI.
 - **`platform/desktop/services/`**: Tauri command, dialog, and window adapters.
-- **`platform/web/`**: Browser fetch, File System Access API, IndexedDB, LocalStorage, and WASM adapters.
+- **`platform/web/`**: Browser fetch, File System Access API, IndexedDB, LocalStorage, and WASM adapters. Domain-specific WASM wrappers live under `services/core`; `wasmClient.ts` is only their stable barrel export.
 - **`types/`**: TypeScript interfaces. **Crucial:** These types must always be kept in sync with the Rust models.
 
 Build selection is handled by the Vite `@platform/*` alias. Shared components must not import Tauri or browser persistence APIs directly.
 
 ### Backend (`src-tauri/src/`)
-- **`models/`**: Rust data structures that serialize/deserialize data to and from the frontend (e.g., `auth.rs`, `request.rs`, `response.rs`, `collection.rs`).
+- **`models/`**: Desktop-only runtime and response structures. Shared request/auth/workspace models live in `dispatch-core`.
 - **`commands/`**: Tauri command handlers exposed to the frontend (e.g., `request_command.rs`, `history_command.rs`, `collection_command.rs`).
-- **`services/`**: Core business logic. This is where `reqwest` is utilized to actually send the HTTP requests.
+- **`services/`**: Desktop integrations such as `reqwest`, native cookies, filesystem persistence and archives. Shared rules belong in `dispatch-core`. Large native integrations are split into domain submodules: HTTP request building/response decoding, cookie record conversion, and archive format/reader/writer.
+- **`commands/`**: Thin Tauri entry points. Workspace document persistence belongs to `workspace_document_service`; OAuth loopback/browser details live below `oauth_command`, not in the command flow itself.
 - **`lib.rs` / `main.rs`**: Tauri application configuration, plugin registration, and command registration.
 
 ### Web Rust (`rust/`)
 
-- `dispatch-web-core`: platform-independent workspace validation and OpenAPI helpers.
+- `dispatch-core`: shared request/auth/settings/workspace models, immutable variable resolution, auth/body/settings transport preparation, response body classification, workspace creation/validation, collection/environment mutation rules, and typed OpenAPI parse/inspect/import/export logic. Native callers pass core models directly; JSON conversion is reserved for the JavaScript/WASM boundary.
 - `dispatch-web-wasm`: the `wasm-bindgen` bridge loaded by the web adapter.
 
 ## ✨ Core Features & Implementation Details
 
 1. **Request Construction & Execution**
    - The frontend constructs an `ApiRequest` object containing the URL, Method, Headers, Query Params, Body, and Auth configuration.
-   - Before dispatching, the frontend resolves any environment variables (e.g., `{{base_url}}`) in the request payload.
-   - It invokes the `send_request` Tauri command. The Rust backend takes this payload, translates it into a `reqwest::RequestBuilder`, executes the HTTP call, and returns a structured `Response` back to the UI.
+   - Before dispatching, `dispatch-core` resolves environment variables (e.g., `{{base_url}}`) in the request payload. Desktop reaches it through Tauri; web reaches the same function through WASM.
+   - Authentication is applied to a cloned transport request by `dispatch-core`; `reqwest` and `fetch` remain platform adapters.
+   - The shared execution hook invokes the selected platform service. Desktop translates the payload
+     into a `reqwest::RequestBuilder` through Tauri; web translates the same prepared payload into
+     browser `fetch`. Both return the same structured response contract to the UI.
 
 2. **Authentication Handling**
-   - Managed in `src-tauri/src/models/auth.rs` and `src/components/layout/AuthEditor.tsx`.
+   - The shared model lives in `rust/dispatch-core/src/auth.rs`; editing UI lives in `src/components/layout/AuthEditor.tsx`.
    - Supports: `None`, `Bearer Token`, `Basic Auth`, `API Key`, and `OAuth 2.0`.
    - OAuth 2.0 supports `Client Credentials`, `Password`, and `Authorization Code` flows.
 
 3. **Environments & Variables**
    - Environments allow users to switch contexts (e.g., Local vs Production).
-   - Rust manages a thread-safe `AppState` (wrapped in a `Mutex`) which is loaded upon application startup.
-   - Variables are injected into URLs, Headers, and Bodies using double curly brace syntax.
+   - Desktop keeps active-environment state behind a `Mutex`; web persists the selection through its browser adapter.
+   - Variables are injected into URLs, header names/values, bodies, form fields, and auth fields using double curly brace syntax.
 
 4. **Collections & History**
    - **History**: Every executed request is automatically logged to a local history state.

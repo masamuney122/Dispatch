@@ -90,7 +90,7 @@ export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ respon
         className="flex items-center justify-between shrink-0 border-b border-[#2e2e2e] text-xs"
         style={{
           minHeight: "30px",
-          padding: "4px 48px",
+          padding: "4px 36px",
         }}
       >
         <div className="relative top-[3px] flex items-center gap-4">
@@ -205,8 +205,8 @@ export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ respon
               <div
                 className="flex items-center gap-4 shrink-0"
                 style={{
-                  paddingLeft: "48px",
-                  paddingRight: "48px",
+                  paddingLeft: "36px",
+                  paddingRight: "36px",
                   paddingTop: "8px",
                   paddingBottom: "6px",
                 }}
@@ -250,7 +250,7 @@ export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ respon
                 <div><p className="text-sm font-semibold text-zinc-300">Browser managed cookies</p><p className="mt-2 max-w-lg text-xs leading-5 text-zinc-500">Tarayıcı Set-Cookie header'ını JavaScript'e göstermediği için response cookie listesi web sürümünde okunamaz.</p></div>
               </div>
             ) : response?.cookies?.length ? (
-              <OverlayScrollArea containerClassName="flex-1 min-h-0" className="overflow-auto" style={{ padding: "20px 48px 24px" }}>
+              <OverlayScrollArea containerClassName="flex-1 min-h-0" className="overflow-auto" style={{ padding: "20px 36px 24px" }}>
                 <table className="w-full table-fixed overflow-hidden border-separate border-spacing-0 border border-[#343434] bg-[#202020] text-left font-mono text-xs">
                   <thead className="sticky top-0 z-10 bg-[#242424] text-[#969696]"><tr className="h-8"><th className="w-[18%] border-b border-[#343434] px-3 font-medium">Name</th><th className="w-[28%] border-b border-l border-[#343434] px-3 font-medium">Value</th><th className="w-[20%] border-b border-l border-[#343434] px-3 font-medium">Domain</th><th className="w-[12%] border-b border-l border-[#343434] px-3 font-medium">Path</th><th className="border-b border-l border-[#343434] px-3 font-medium">Attributes</th></tr></thead>
                   <tbody>{response.cookies.map((cookie) => <tr key={`${cookie.domain}:${cookie.path}:${cookie.name}`} className="h-8 text-zinc-300"><td className="truncate border-b border-[#2e2e2e] px-3">{cookie.name}</td><td className="truncate border-b border-l border-[#2e2e2e] px-3 text-zinc-400">{cookie.value}</td><td className="truncate border-b border-l border-[#2e2e2e] px-3 text-zinc-400">{cookie.domain}</td><td className="truncate border-b border-l border-[#2e2e2e] px-3 text-zinc-400">{cookie.path}</td><td className="truncate border-b border-l border-[#2e2e2e] px-3 text-[10px] text-zinc-500">{[cookie.secure && "Secure", cookie.http_only && "HttpOnly", cookie.same_site && `SameSite=${cookie.same_site}`, cookie.expires_at ? new Date(cookie.expires_at * 1000).toLocaleString() : "Session"].filter(Boolean).join(" · ")}</td></tr>)}</tbody>
@@ -265,7 +265,7 @@ export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ respon
             <OverlayScrollArea
               containerClassName="flex-1 min-h-0"
               className="overflow-auto bg-transparent"
-              style={{ padding: "20px 48px 24px" }}
+              style={{ padding: "20px 36px 24px" }}
             >
               <table className="w-full table-fixed overflow-hidden border-separate border-spacing-0 border border-[#343434] bg-[#202020] text-left font-mono text-xs">
                 <thead className="sticky top-0 bg-[#242424] text-[#969696] z-10">
@@ -296,7 +296,7 @@ export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ respon
 
       {!loading && section === "tests" && (
         <OverlayScrollArea containerClassName="flex-1 min-h-0" axis="vertical" className="overflow-y-auto">
-          <div className="space-y-2 px-12 py-4 text-xs">
+          <div className="space-y-2 px-9 py-4 text-xs">
             {scriptFailures.map((report) => (
               <div key={`${report.phase}:${report.error}`} className="rounded-lg border border-rose-900/60 bg-rose-950/20 px-3 py-2.5">
                 <div className="flex items-center justify-between gap-3">
@@ -327,7 +327,7 @@ export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ respon
 
       {!loading && section === "console" && (
         <OverlayScrollArea containerClassName="flex-1 min-h-0" axis="vertical" className="overflow-y-auto">
-          <div className="px-12 py-4 font-mono text-[11px] leading-5 select-text">
+          <div className="px-9 py-4 font-mono text-[11px] leading-5 select-text">
             {scriptLogs.map((log, index) => (
               <div key={`${log.phase}:${index}`} className="flex gap-3 border-b border-[#2e2e2e] py-1.5 last:border-b-0">
                 <span className="w-24 shrink-0 text-[9px] text-zinc-600">{log.phase}</span>

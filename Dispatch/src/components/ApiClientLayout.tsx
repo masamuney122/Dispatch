@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useState } from "react";
 import { TopNavbar } from "./layout/TopNavbar";
 import { ExplorerSidebar } from "./layout/ExplorerSidebar";
 import { RequestTabsBar } from "./layout/RequestTabsBar";
@@ -9,7 +9,6 @@ import { HeadersEditor } from "./layout/HeadersEditor";
 import { BodyEditor } from "./layout/BodyEditor";
 import { AuthEditor } from "./layout/AuthEditor";
 import { ResponsePlaceholder } from "./layout/ResponsePlaceholder";
-import { BottomStatusBar } from "./layout/BottomStatusBar";
 import { SaveRequestDialog } from "./layout/SaveRequestDialog";
 import { OpenApiImportDialog } from "./openapi/OpenApiImportDialog";
 import { OpenApiExportDialog } from "./openapi/OpenApiExportDialog";
@@ -22,16 +21,15 @@ import { ScriptsEditor } from "./scripts/ScriptsEditor";
 
 import { useRequestTabs } from "../hooks/useRequestTabs";
 import { useAppData } from "../hooks/useAppData";
-
-import { sendRequest } from "../services/api";
-import { saveHistory, loadHistory } from "../services/historyService";
-import { saveRequestToCollection, createCollection, updateRequestInCollection } from "../services/collectionService";
+import { useRequestExecution } from "../hooks/useRequestExecution";
 import {
-  resolveRequestVariables,
-  VariableResolutionError,
-} from "../services/environmentVariableResolver";
+  SIDEBAR_MAX_WIDTH,
+  SIDEBAR_MIN_WIDTH,
+  useResizablePanels,
+} from "../hooks/useResizablePanels";
 
-import type { ApiRequest } from "../types/request";
+import { saveRequestToCollection, createCollection, updateRequestInCollection } from "../services/collectionService";
+
 import type { HistoryItem } from "../types/history";
 import type { QueryParamItem } from "../types/tab";
 import type { Collection, SavedRequest } from "../types/collection";
@@ -42,18 +40,12 @@ import { flushWorkspaceChanges } from "../services/workspaceLifecycle";
 import { exportCollectionOpenApi, importOpenApi, inspectOpenApi } from "../services/openApiService";
 import { loadGlobalHttpSettings, saveGlobalHttpSettings } from "../services/httpSettingsService";
 import { platformCapabilities } from "../services/platformService";
-import { executeRequestScript } from "../services/scriptService";
 import { DEFAULT_HTTP_SETTINGS, type GlobalHttpSettings, type RequestHttpSettings } from "../types/httpSettings";
-import { EMPTY_REQUEST_SCRIPTS, type ScriptExecutionReport } from "../types/script";
-
-const RESPONSE_PANEL_DEFAULT_HEIGHT = 320;
-const RESPONSE_PANEL_MIN_HEIGHT = 220;
-const REQUEST_PANEL_MIN_HEIGHT = 240;
-const RESPONSE_PANEL_MAX_RATIO = 0.72;
-const SIDEBAR_DEFAULT_WIDTH = 320;
-const SIDEBAR_MIN_WIDTH = 220;
-const SIDEBAR_MAX_WIDTH = 560;
-const MAIN_PANEL_MIN_WIDTH = 560;
+import { EMPTY_REQUEST_SCRIPTS } from "../types/script";
+import {
+  createRequestPayload,
+  requestDisplayName,
+} from "../utils/requestDraft";
 
 interface ApiClientLayoutProps {
   workspaceName: string;
@@ -125,23 +117,6 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
   const [cookieManagerOpen, setCookieManagerOpen] = useState(false);
   const [globalSettingsSaving, setGlobalSettingsSaving] = useState(false);
   const [globalSettingsError, setGlobalSettingsError] = useState<string | null>(null);
-  const [responsePanelHeight, setResponsePanelHeight] = useState(RESPONSE_PANEL_DEFAULT_HEIGHT);
-  const [isResizingResponse, setIsResizingResponse] = useState(false);
-  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
-  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
-  const requestWorkspaceRef = useRef<HTMLDivElement>(null);
-  const resizeSessionRef = useRef<{
-    pointerId: number;
-    startY: number;
-    startHeight: number;
-  } | null>(null);
-  const sidebarResizeSessionRef = useRef<{
-    pointerId: number;
-    startX: number;
-    startWidth: number;
-  } | null>(null);
-  const previousBodyStyleRef = useRef<{ cursor: string; userSelect: string } | null>(null);
-  const previousSidebarBodyStyleRef = useRef<{ cursor: string; userSelect: string } | null>(null);
 
   useEffect(() => {
     void loadGlobalHttpSettings()
@@ -149,194 +124,16 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
       .catch((error) => console.error("Global HTTP settings could not be loaded", error));
   }, []);
 
-  // ── Derived Helpers ──
-
-  const buildFinalUrl = (targetUrl: string, params: QueryParamItem[]) => {
-    const validParams = params.filter((q) => q.key.trim());
-    if (validParams.length === 0) return targetUrl;
-    try {
-      const [base, existingSearch] = targetUrl.split("?");
-      const searchParams = new URLSearchParams(existingSearch || "");
-      validParams.forEach((q) => {
-        searchParams.set(q.key.trim(), q.value);
-      });
-      return `${base}?${searchParams.toString()}`;
-    } catch {
-      return targetUrl;
-    }
-  };
-
-  const createRequestTemplate = () => {
-    const headersRecord: Record<string, string> = {};
-    activeTab.headers.forEach((h) => {
-      // Treat undefined as enabled for backwards compatibility
-      const isEnabled = h.enabled !== false;
-      const key = (h.key || "").trim();
-      if (isEnabled && key) {
-        headersRecord[key] = h.value || "";
-      }
-    });
-
-    return {
-      request: {
-        method: activeTab.method,
-        url: activeTab.url,
-        body: activeTab.body,
-        body_type: activeTab.bodyType,
-        form_fields: activeTab.formFields,
-        binary: activeTab.binary,
-        headers: headersRecord,
-        auth: activeTab.auth,
-        settings: activeTab.settings,
-        scripts: activeTab.scripts,
-      } satisfies ApiRequest,
-      queryParams: activeTab.queryParams.map(({ key, value }) => ({
-        key,
-        value,
-      })),
-    };
-  };
-
-  const createRequestPayload = (): ApiRequest => {
-    const template = createRequestTemplate();
-    return {
-      ...template.request,
-      url: buildFinalUrl(template.request.url, template.queryParams),
-    };
-  };
-
-  const getRequestName = () => {
-    if (activeTab.title && activeTab.title !== "Untitled Request") return activeTab.title;
-    try {
-      const parsed = new URL(activeTab.url);
-      return `${activeTab.method} ${parsed.hostname}${parsed.pathname === "/" ? "" : parsed.pathname}`;
-    } catch {
-      return activeTab.title || "Untitled Request";
-    }
-  };
-
   // ── Event Handlers ──
 
-  const handleSendRequest = async () => {
-    updateActiveTab({ loading: true, error: null, selectedSavedRequestId: null, scriptReports: [] });
-    const originalRequest = createRequestPayload();
-    const scriptReports: ScriptExecutionReport[] = [];
-
-    try {
-      const activeEnvironment = environments.find(
-        (environment) => environment.id === activeEnvironmentId
-      );
-      let runtimeRequest = originalRequest;
-      let runtimeVariables = { ...(activeEnvironment?.variables || {}) };
-
-      const preResult = await executeRequestScript({
-        phase: "pre-request",
-        source: activeTab.scripts.pre_request,
-        request: runtimeRequest,
-        environment: runtimeVariables,
-        hasActiveEnvironment: Boolean(activeEnvironment),
-      });
-      scriptReports.push(preResult.report);
-      updateActiveTab({ scriptReports: [...scriptReports] });
-      if (preResult.report.status === "failed") {
-        throw new Error(`Pre-request script failed: ${preResult.report.error || "Unknown error"}`);
-      }
-      runtimeRequest = preResult.request;
-      runtimeVariables = preResult.environment;
-      if (activeEnvironment && preResult.environment_mutations.length > 0) {
-        await handleCommitEnvironment(
-          activeEnvironment.id,
-          activeEnvironment.name,
-          runtimeVariables
-        );
-      }
-
-      const resolvedTemplate = resolveRequestVariables(
-        { request: runtimeRequest, queryParams: [] },
-        runtimeVariables
-      );
-      const resolvedRequest: ApiRequest = {
-        ...resolvedTemplate.request,
-        url: buildFinalUrl(
-          resolvedTemplate.request.url,
-          resolvedTemplate.queryParams
-        ),
-      };
-      const res = await sendRequest(resolvedRequest);
-
-      const postResult = await executeRequestScript({
-        phase: "post-response",
-        source: activeTab.scripts.post_response,
-        request: resolvedRequest,
-        response: res,
-        environment: runtimeVariables,
-        hasActiveEnvironment: Boolean(activeEnvironment),
-      });
-      scriptReports.push(postResult.report);
-      if (
-        postResult.report.status === "passed" &&
-        activeEnvironment &&
-        postResult.environment_mutations.length > 0
-      ) {
-        try {
-          await handleCommitEnvironment(
-            activeEnvironment.id,
-            activeEnvironment.name,
-            postResult.environment
-          );
-        } catch (commitError) {
-          postResult.report.status = "failed";
-          postResult.report.error = `Environment changes could not be saved: ${
-            commitError instanceof Error ? commitError.message : String(commitError)
-          }`;
-        }
-      }
-      updateActiveTab({ response: res, loading: false, scriptReports: [...scriptReports] });
-
-      const newItem: HistoryItem = {
-        id: crypto.randomUUID(),
-        method: activeTab.method,
-        url: originalRequest.url,
-        body: originalRequest.body,
-        status: res.status,
-        response_time_ms: res.response_time_ms,
-        timestamp: new Date().toISOString(),
-        error: null,
-        auth: originalRequest.auth,
-      };
-      await saveHistory(newItem);
-      const updatedHist = await loadHistory();
-      setHistory(updatedHist || []);
-      updateActiveTab({ selectedHistoryId: newItem.id });
-    } catch (err) {
-      const errMsg =
-        err instanceof Error
-          ? err.message
-          : typeof err === "string"
-            ? err
-            : JSON.stringify(err);
-
-      updateActiveTab({ error: errMsg, response: null, loading: false, scriptReports: [...scriptReports] });
-
-      if (err instanceof VariableResolutionError) return;
-
-      const errItem: HistoryItem = {
-        id: crypto.randomUUID(),
-        method: activeTab.method,
-        url: originalRequest.url,
-        body: originalRequest.body,
-        status: null,
-        response_time_ms: null,
-        timestamp: new Date().toISOString(),
-        error: errMsg,
-        auth: originalRequest.auth,
-      };
-      await saveHistory(errItem);
-      const updatedHist = await loadHistory();
-      setHistory(updatedHist || []);
-      updateActiveTab({ selectedHistoryId: errItem.id });
-    }
-  };
+  const handleSendRequest = useRequestExecution({
+    activeTab,
+    environments,
+    activeEnvironmentId,
+    updateActiveTab,
+    commitEnvironment: handleCommitEnvironment,
+    setHistory,
+  });
 
   const handleSelectHistory = (item: HistoryItem) => {
     let parsedParams: QueryParamItem[] = [];
@@ -455,8 +252,8 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
           const updated = await updateRequestInCollection(
             collectionId,
             activeTab.selectedSavedRequestId,
-            getRequestName(),
-            createRequestPayload()
+            requestDisplayName(activeTab),
+            createRequestPayload(activeTab)
           );
           await refreshCollections();
           updateActiveTab({ title: updated.name, isDirty: false });
@@ -476,7 +273,11 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
       setCollections((current) => [...current, collection]);
       targetId = collection.id;
     }
-    const saved = await saveRequestToCollection(targetId, getRequestName(), createRequestPayload());
+    const saved = await saveRequestToCollection(
+      targetId,
+      requestDisplayName(activeTab),
+      createRequestPayload(activeTab),
+    );
     await refreshCollections();
     updateActiveTab({
       selectedSavedRequestId: saved.id,
@@ -490,172 +291,19 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
   const environmentEditorEnvironment = environments.find(
     (environment) => environment.id === activeEnvironmentTabId
   );
-
-  const getResponsePanelBounds = () => {
-    const workspaceHeight = requestWorkspaceRef.current?.clientHeight ?? 0;
-    const maximumHeight = Math.max(
-      RESPONSE_PANEL_MIN_HEIGHT,
-      Math.min(
-        Math.floor(workspaceHeight * RESPONSE_PANEL_MAX_RATIO),
-        workspaceHeight - REQUEST_PANEL_MIN_HEIGHT
-      )
-    );
-
-    return { minimumHeight: RESPONSE_PANEL_MIN_HEIGHT, maximumHeight };
-  };
-
-  const restoreResizeBodyStyles = () => {
-    const previousStyles = previousBodyStyleRef.current;
-    if (!previousStyles) return;
-    document.body.style.cursor = previousStyles.cursor;
-    document.body.style.userSelect = previousStyles.userSelect;
-    previousBodyStyleRef.current = null;
-  };
-
-  const handleResponseResizeStart = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return;
-
-    event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    resizeSessionRef.current = {
-      pointerId: event.pointerId,
-      startY: event.clientY,
-      startHeight: responsePanelHeight,
-    };
-    previousBodyStyleRef.current = {
-      cursor: document.body.style.cursor,
-      userSelect: document.body.style.userSelect,
-    };
-    document.body.style.cursor = "row-resize";
-    document.body.style.userSelect = "none";
-    setIsResizingResponse(true);
-  };
-
-  const handleResponseResizeMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const session = resizeSessionRef.current;
-    if (!session || session.pointerId !== event.pointerId) return;
-
-    event.preventDefault();
-    const requestedHeight = session.startHeight + session.startY - event.clientY;
-    const { minimumHeight, maximumHeight } = getResponsePanelBounds();
-    setResponsePanelHeight(
-      Math.min(maximumHeight, Math.max(minimumHeight, requestedHeight))
-    );
-  };
-
-  const handleResponseResizeEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const session = resizeSessionRef.current;
-    if (!session || session.pointerId !== event.pointerId) return;
-
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    resizeSessionRef.current = null;
-    setIsResizingResponse(false);
-    restoreResizeBodyStyles();
-  };
-
-  const restoreSidebarResizeBodyStyles = () => {
-    const previousStyles = previousSidebarBodyStyleRef.current;
-    if (!previousStyles) return;
-    document.body.style.cursor = previousStyles.cursor;
-    document.body.style.userSelect = previousStyles.userSelect;
-    previousSidebarBodyStyleRef.current = null;
-  };
-
-  const getSidebarMaximumWidth = () =>
-    Math.max(
-      SIDEBAR_MIN_WIDTH,
-      Math.min(SIDEBAR_MAX_WIDTH, window.innerWidth - MAIN_PANEL_MIN_WIDTH - 12)
-    );
-
-  const handleSidebarResizeStart = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return;
-
-    event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    sidebarResizeSessionRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startWidth: sidebarWidth,
-    };
-    previousSidebarBodyStyleRef.current = {
-      cursor: document.body.style.cursor,
-      userSelect: document.body.style.userSelect,
-    };
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    setIsResizingSidebar(true);
-  };
-
-  const handleSidebarResizeMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const session = sidebarResizeSessionRef.current;
-    if (!session || session.pointerId !== event.pointerId) return;
-
-    event.preventDefault();
-    const requestedWidth = session.startWidth + event.clientX - session.startX;
-    setSidebarWidth(
-      Math.min(getSidebarMaximumWidth(), Math.max(SIDEBAR_MIN_WIDTH, requestedWidth))
-    );
-  };
-
-  const handleSidebarResizeEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const session = sidebarResizeSessionRef.current;
-    if (!session || session.pointerId !== event.pointerId) return;
-
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    sidebarResizeSessionRef.current = null;
-    setIsResizingSidebar(false);
-    restoreSidebarResizeBodyStyles();
-  };
-
-  useEffect(() => {
-    const workspace = requestWorkspaceRef.current;
-    if (!workspace || typeof ResizeObserver === "undefined") return;
-
-    const observer = new ResizeObserver(([entry]) => {
-      const workspaceHeight = entry.contentRect.height;
-      const maximumHeight = Math.max(
-        RESPONSE_PANEL_MIN_HEIGHT,
-        Math.min(
-          Math.floor(workspaceHeight * RESPONSE_PANEL_MAX_RATIO),
-          workspaceHeight - REQUEST_PANEL_MIN_HEIGHT
-        )
-      );
-      setResponsePanelHeight((currentHeight) => Math.min(currentHeight, maximumHeight));
-    });
-    observer.observe(workspace);
-    return () => observer.disconnect();
-  }, [environmentEditorEnvironment?.id]);
-
-  useEffect(
-    () => () => {
-      const previousStyles = previousBodyStyleRef.current;
-      if (previousStyles) {
-        document.body.style.cursor = previousStyles.cursor;
-        document.body.style.userSelect = previousStyles.userSelect;
-      }
-
-      const previousSidebarStyles = previousSidebarBodyStyleRef.current;
-      if (previousSidebarStyles) {
-        document.body.style.cursor = previousSidebarStyles.cursor;
-        document.body.style.userSelect = previousSidebarStyles.userSelect;
-      }
-    },
-    []
-  );
-
-  useEffect(() => {
-    const handleWindowResize = () => {
-      setSidebarWidth((currentWidth) =>
-        Math.min(currentWidth, getSidebarMaximumWidth())
-      );
-    };
-    window.addEventListener("resize", handleWindowResize);
-    return () => window.removeEventListener("resize", handleWindowResize);
-  }, []);
+  const {
+    requestWorkspaceRef,
+    responsePanelHeight,
+    sidebarWidth,
+    isResizingResponse,
+    isResizingSidebar,
+    handleResponseResizeStart,
+    handleResponseResizeMove,
+    handleResponseResizeEnd,
+    handleSidebarResizeStart,
+    handleSidebarResizeMove,
+    handleSidebarResizeEnd,
+  } = useResizablePanels(environmentEditorEnvironment?.id);
 
   const getActiveCollection = () => {
     if (!activeTab.selectedSavedRequestId) return null;
@@ -739,7 +387,21 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
       const result = await exportCollectionOpenApi(openApiExportCollection, options);
       if (result.cancelled) return;
       setOpenApiExportCollection(null);
-      window.alert(`OpenAPI dışa aktarıldı: ${result.endpoint_count} endpoint`);
+      const grouped = result.grouped_request_count > 0
+        ? `\n${result.grouped_request_count} request aynı method/path altında örnek olarak gruplandı.`
+        : "";
+      const otherWarnings = result.warnings.filter(
+        (warning) => warning.code !== "duplicate-operation-grouped"
+      );
+      const warningSummary = otherWarnings.length > 0
+        ? `\n\nUyarılar:\n${otherWarnings
+            .slice(0, 5)
+            .map((warning) => `• ${warning.message}${warning.location ? ` (${warning.location})` : ""}`)
+            .join("\n")}${otherWarnings.length > 5 ? `\n• +${otherWarnings.length - 5} uyarı` : ""}`
+        : "";
+      window.alert(
+        `OpenAPI dışa aktarıldı: ${result.request_count} request, ${result.endpoint_count} operation.${grouped}${warningSummary}`
+      );
     } catch (error) {
       setOpenApiError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -860,13 +522,13 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
                   containerClassName="flex-1 min-h-0"
                   axis="vertical"
                   className="overflow-y-auto"
-                  style={{ padding: "10px 48px 28px" }}
+                  style={{ padding: "10px 36px 28px" }}
                 >
                   <div className="w-full flex flex-col gap-2">
                   {/* URL Bar */}
                   <UrlActionBar
                     method={activeTab.method}
-                    title={getRequestName()}
+                    title={requestDisplayName(activeTab)}
                     breadcrumbItems={activeRequestBreadcrumb}
                     onChangeTitle={(t) => updateActiveTab({ title: t })}
                     onChangeMethod={(m) => updateActiveTab({ method: m as import("../types/request").HttpMethod })}
@@ -986,8 +648,6 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
           </div>
         </main>
       </div>
-
-      <BottomStatusBar />
 
       {/* Save Request Dialog */}
       {saveDialogOpen && (

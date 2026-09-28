@@ -3,44 +3,14 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::models::collection::Collection;
-use crate::models::environment::Environment;
+pub use dispatch_core::{
+    CollectionsDocument, EnvironmentsDocument, GlobalHttpSettings, WorkspaceManifest,
+    WORKSPACE_FORMAT, WORKSPACE_SCHEMA_VERSION,
+};
 
-pub const WORKSPACE_FORMAT: &str = "dispatch-workspace";
-pub const WORKSPACE_SCHEMA_VERSION: u32 = 1;
 pub const WORKSPACE_MANIFEST_FILE: &str = "dispatch.workspace.json";
 pub const COLLECTIONS_FILE: &str = "collections.json";
 pub const ENVIRONMENTS_FILE: &str = "environments.json";
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkspaceManifest {
-    pub format: String,
-    pub schema_version: u32,
-    pub id: String,
-    pub name: String,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CollectionsDocument {
-    pub schema_version: u32,
-    pub workspace_id: String,
-    pub revision: u64,
-    pub updated_at: String,
-    #[serde(default)]
-    pub collections: Vec<Collection>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EnvironmentsDocument {
-    pub schema_version: u32,
-    pub workspace_id: String,
-    pub revision: u64,
-    pub updated_at: String,
-    #[serde(default)]
-    pub environments: Vec<Environment>,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkspaceSession {
@@ -66,31 +36,6 @@ pub struct AppSettings {
     pub http: GlobalHttpSettings,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct GlobalHttpSettings {
-    pub http_version: crate::models::request::HttpVersionPreference,
-    pub verify_ssl: bool,
-    pub follow_redirects: bool,
-    pub remove_referer_on_redirect: bool,
-    pub max_redirects: usize,
-    #[serde(default)]
-    pub cookie_credentials: crate::models::request::CookieCredentials,
-}
-
-impl Default for GlobalHttpSettings {
-    fn default() -> Self {
-        Self {
-            http_version: crate::models::request::HttpVersionPreference::Auto,
-            verify_ssl: true,
-            follow_redirects: true,
-            remove_referer_on_redirect: false,
-            max_redirects: 10,
-            cookie_credentials: crate::models::request::CookieCredentials::SameOrigin,
-        }
-    }
-}
-
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
@@ -107,42 +52,4 @@ impl Default for AppSettings {
 pub struct WorkspaceRuntimeState {
     pub current_workspace: Option<WorkspaceSession>,
     pub settings: AppSettings,
-}
-
-impl WorkspaceManifest {
-    pub fn new(name: String) -> Self {
-        let now = chrono::Utc::now().to_rfc3339();
-        Self {
-            format: WORKSPACE_FORMAT.to_string(),
-            schema_version: WORKSPACE_SCHEMA_VERSION,
-            id: uuid::Uuid::new_v4().to_string(),
-            name,
-            created_at: now.clone(),
-            updated_at: now,
-        }
-    }
-}
-
-impl CollectionsDocument {
-    pub fn empty(workspace_id: String) -> Self {
-        Self {
-            schema_version: WORKSPACE_SCHEMA_VERSION,
-            workspace_id,
-            revision: 0,
-            updated_at: chrono::Utc::now().to_rfc3339(),
-            collections: Vec::new(),
-        }
-    }
-}
-
-impl EnvironmentsDocument {
-    pub fn empty(workspace_id: String) -> Self {
-        Self {
-            schema_version: WORKSPACE_SCHEMA_VERSION,
-            workspace_id,
-            revision: 0,
-            updated_at: chrono::Utc::now().to_rfc3339(),
-            environments: Vec::new(),
-        }
-    }
 }

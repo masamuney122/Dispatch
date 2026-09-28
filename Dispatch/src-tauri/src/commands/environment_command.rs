@@ -1,12 +1,15 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::Manager;
 
-use crate::models::environment::{AppState, Environment};
-use crate::models::workspace::{
-    EnvironmentsDocument, WorkspaceRuntimeState, ENVIRONMENTS_FILE, WORKSPACE_SCHEMA_VERSION,
+use dispatch_core::{
+    apply_environment_mutation, EnvironmentMutation, EnvironmentMutationContext,
+    EnvironmentMutationResult,
 };
-use crate::services::storage_service::{read_json, write_json_atomic};
+
+use crate::models::environment::{AppState, Environment};
+use crate::models::workspace::{WorkspaceRuntimeState, ENVIRONMENTS_FILE};
+use crate::services::workspace_document_service::save_environments;
 use crate::services::workspace_service::{save_settings, workspace_file};
 
 fn environment_file_path(runtime: &Mutex<WorkspaceRuntimeState>) -> Result<PathBuf, String> {
@@ -18,18 +21,47 @@ fn environment_file_path(runtime: &Mutex<WorkspaceRuntimeState>) -> Result<PathB
     Ok(workspace_file(session, ENVIRONMENTS_FILE))
 }
 
-fn persist_environment_state(path: &Path, state: &AppState) -> Result<(), String> {
-    let mut document: EnvironmentsDocument = read_json(path, "environments document")?;
-    if document.schema_version != WORKSPACE_SCHEMA_VERSION {
-        return Err(format!(
-            "Unsupported environments schema version: {}",
-            document.schema_version
-        ));
-    }
-    document.revision = document.revision.saturating_add(1);
-    document.updated_at = chrono::Utc::now().to_rfc3339();
-    document.environments = state.environments.clone();
-    write_json_atomic(path, &document, "environments document")
+fn workspace_id(runtime: &Mutex<WorkspaceRuntimeState>) -> Result<String, String> {
+    let runtime = runtime.lock().map_err(|error| error.to_string())?;
+    Ok(runtime
+        .current_workspace
+        .as_ref()
+        .ok_or_else(|| "No workspace is currently open".to_string())?
+        .manifest
+        .id
+        .clone())
+}
+
+fn mutate_environment_state(
+    state: &mut AppState,
+    workspace_id: &str,
+    mutation: EnvironmentMutation,
+    needs_entity_id: bool,
+) -> Result<EnvironmentMutationResult, String> {
+    let result = apply_environment_mutation(
+        &state.environments,
+        state.active_environment_id.as_deref(),
+        mutation,
+        &EnvironmentMutationContext {
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            entity_id: if needs_entity_id {
+                uuid::Uuid::new_v4().to_string()
+            } else {
+                String::new()
+            },
+            workspace_id: workspace_id.to_string(),
+        },
+    )?;
+    state.environments = result.environments.clone();
+    state.active_environment_id = result.active_environment_id.clone();
+    Ok(result)
+}
+
+fn result_environment(result: &EnvironmentMutationResult) -> Result<Environment, String> {
+    result
+        .environment
+        .clone()
+        .ok_or_else(|| "Environment operation did not return an entity".to_string())
 }
 
 fn persist_active_environment(
@@ -74,22 +106,17 @@ pub fn create_environment(
     name: String,
     variables: std::collections::HashMap<String, String>,
 ) -> Result<Environment, String> {
-    let path = environment_file_path(&runtime)?;
-    let now = chrono::Utc::now().to_rfc3339();
-    let env = Environment {
-        id: uuid::Uuid::new_v4().to_string(),
-        name,
-        variables,
-        workspace_id: None,
-        created_at: now.clone(),
-        updated_at: now,
-    };
-
+    let path = environment_file_path(runtime.inner())?;
+    let workspace_id = workspace_id(runtime.inner())?;
     let mut app_state = state.lock().map_err(|e| e.to_string())?;
-    app_state.environments.push(env.clone());
-    persist_environment_state(&path, &app_state)?;
-
-    Ok(env)
+    let result = mutate_environment_state(
+        &mut app_state,
+        &workspace_id,
+        EnvironmentMutation::Create { name, variables },
+        true,
+    )?;
+    save_environments(&path, &app_state.environments)?;
+    result_environment(&result)
 }
 
 #[tauri::command]
@@ -110,24 +137,21 @@ pub fn update_environment(
     name: String,
     variables: std::collections::HashMap<String, String>,
 ) -> Result<Environment, String> {
-    let path = environment_file_path(&runtime)?;
+    let path = environment_file_path(runtime.inner())?;
+    let workspace_id = workspace_id(runtime.inner())?;
     let mut app_state = state.lock().map_err(|e| e.to_string())?;
-
-    let updated = {
-        let env = app_state
-            .environments
-            .iter_mut()
-            .find(|e| e.id == id)
-            .ok_or_else(|| format!("Environment not found: {}", id))?;
-
-        env.name = name;
-        env.variables = variables;
-        env.updated_at = chrono::Utc::now().to_rfc3339();
-        env.clone()
-    };
-    persist_environment_state(&path, &app_state)?;
-
-    Ok(updated)
+    let result = mutate_environment_state(
+        &mut app_state,
+        &workspace_id,
+        EnvironmentMutation::Update {
+            id,
+            name,
+            variables,
+        },
+        false,
+    )?;
+    save_environments(&path, &app_state.environments)?;
+    result_environment(&result)
 }
 
 #[tauri::command]
@@ -137,21 +161,16 @@ pub fn delete_environment(
     state: tauri::State<'_, Mutex<AppState>>,
     id: String,
 ) -> Result<(), String> {
-    let path = environment_file_path(&runtime)?;
+    let path = environment_file_path(runtime.inner())?;
+    let workspace_id = workspace_id(runtime.inner())?;
     let mut app_state = state.lock().map_err(|e| e.to_string())?;
-
-    // If deleting the active environment, deactivate it
-    if app_state.active_environment_id.as_deref() == Some(&id) {
-        app_state.active_environment_id = None;
-    }
-
-    let before = app_state.environments.len();
-    app_state.environments.retain(|e| e.id != id);
-
-    if app_state.environments.len() == before {
-        return Err(format!("Environment not found: {}", id));
-    }
-    persist_environment_state(&path, &app_state)?;
+    mutate_environment_state(
+        &mut app_state,
+        &workspace_id,
+        EnvironmentMutation::Delete { id },
+        false,
+    )?;
+    save_environments(&path, &app_state.environments)?;
     persist_active_environment(
         &app_handle,
         &runtime,
@@ -168,17 +187,15 @@ pub fn set_active_environment(
     state: tauri::State<'_, Mutex<AppState>>,
     id: Option<String>,
 ) -> Result<(), String> {
-    environment_file_path(&runtime)?;
+    environment_file_path(runtime.inner())?;
+    let workspace_id = workspace_id(runtime.inner())?;
     let mut app_state = state.lock().map_err(|e| e.to_string())?;
-
-    // Validate that the environment exists (if setting, not clearing)
-    if let Some(ref env_id) = id {
-        if !app_state.environments.iter().any(|e| &e.id == env_id) {
-            return Err(format!("Environment not found: {}", env_id));
-        }
-    }
-
-    app_state.active_environment_id = id;
+    mutate_environment_state(
+        &mut app_state,
+        &workspace_id,
+        EnvironmentMutation::SetActive { id },
+        false,
+    )?;
     persist_active_environment(
         &app_handle,
         &runtime,

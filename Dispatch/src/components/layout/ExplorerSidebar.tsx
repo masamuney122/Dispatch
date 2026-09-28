@@ -2,14 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
-  useSensor,
-  useSensors,
   closestCenter,
-  type DragStartEvent,
-  type DragMoveEvent,
-  type DragEndEvent,
-  type DragOverEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -23,19 +16,14 @@ import { OverlayScrollArea } from "../common/OverlayScrollArea";
 import { EnvironmentSidebarSection } from "../environment/EnvironmentSidebarSection";
 import {
   CollectionTreeNode,
-  type TreeDropIndicator,
-  type TreeDropIntent,
 } from "./CollectionTreeNode";
 import { FolderContextMenu } from "./FolderContextMenu";
-import { RequestContextMenu } from "./RequestContextMenu";
-import { deleteHistoryItem } from "../../services/historyService";
+import { RequestHistoryPanel } from "./RequestHistoryPanel";
 import {
   buildCollectionTree,
-  flattenTreeToOrderItems,
-  getDescendantFolderIds,
-  reorderTree,
   type TreeNode,
 } from "../../utils/collectionTree";
+import { useExplorerDragDrop } from "../../hooks/useExplorerDragDrop";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -138,34 +126,6 @@ function getAllNodeIds(nodes: TreeNode[]): string[] {
   return ids;
 }
 
-const FOLDER_EDGE_RATIO = 0.25;
-const SIDEBAR_SCROLL_EDGE_PX = 48;
-const SIDEBAR_SCROLL_MAX_SPEED = 10;
-
-type DragPositionEvent = Pick<
-  DragMoveEvent,
-  "active" | "over"
->;
-
-function calculateDropIntent(
-  pointerY: number,
-  targetRect: { top: number; height: number },
-  targetIsFolder: boolean
-): TreeDropIntent {
-  const relativeY = Math.min(
-    1,
-    Math.max(0, (pointerY - targetRect.top) / targetRect.height)
-  );
-
-  if (!targetIsFolder) {
-    return relativeY < 0.5 ? "before" : "after";
-  }
-
-  if (relativeY < FOLDER_EDGE_RATIO) return "before";
-  if (relativeY > 1 - FOLDER_EDGE_RATIO) return "after";
-  return "inside";
-}
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
@@ -205,8 +165,6 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
   const [openCollectionIds, setOpenCollectionIds] = useState<Record<string, boolean>>({});
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [openFolderIds, setOpenFolderIds] = useState<Record<string, boolean>>({});
-  const [openHistoryDateGroups, setOpenHistoryDateGroups] = useState<Record<string, boolean>>({});
-  const [historyContextMenu, setHistoryContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [collectionContextMenu, setCollectionContextMenu] = useState<{
     collectionId: string;
     x: number;
@@ -242,79 +200,22 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
     folderName: string;
   } | null>(null);
 
-  // ── DnD state ─────────────────────────────────────────────────────────────
-  const [draggedNode, setDraggedNode] = useState<TreeNode | null>(null);
-  const [dropIndicator, setDropIndicator] = useState<TreeDropIndicator | null>(null);
-  const sidebarScrollRef = useRef<HTMLDivElement>(null);
-  const autoExpandTimer = useRef<{
-    folderId: string;
-    timer: ReturnType<typeof setTimeout>;
-  } | null>(null);
-  const edgeScrollFrame = useRef<number | null>(null);
-  const edgeScrollSpeed = useRef(0);
-  const pointerClientY = useRef<number | null>(null);
-
-  // DnD sensors: 8px movement threshold so normal clicks still work
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
-  );
-
-  const stopEdgeScroll = useCallback(() => {
-    edgeScrollSpeed.current = 0;
-    if (edgeScrollFrame.current !== null) {
-      cancelAnimationFrame(edgeScrollFrame.current);
-      edgeScrollFrame.current = null;
-    }
-  }, []);
-
-  const setEdgeScroll = useCallback((speed: number) => {
-    edgeScrollSpeed.current = speed;
-    if (speed === 0) {
-      stopEdgeScroll();
-      return;
-    }
-    if (edgeScrollFrame.current !== null) return;
-
-    const tick = () => {
-      const container = sidebarScrollRef.current;
-      const currentSpeed = edgeScrollSpeed.current;
-      if (!container || currentSpeed === 0) {
-        edgeScrollFrame.current = null;
-        return;
-      }
-
-      const previousScrollTop = container.scrollTop;
-      container.scrollTop += currentSpeed;
-      if (container.scrollTop === previousScrollTop) {
-        edgeScrollSpeed.current = 0;
-        edgeScrollFrame.current = null;
-        return;
-      }
-      edgeScrollFrame.current = requestAnimationFrame(tick);
-    };
-
-    edgeScrollFrame.current = requestAnimationFrame(tick);
-  }, [stopEdgeScroll]);
-
-  const clearAutoExpandTimer = useCallback(() => {
-    if (autoExpandTimer.current) {
-      clearTimeout(autoExpandTimer.current.timer);
-      autoExpandTimer.current = null;
-    }
-  }, []);
-
-  useEffect(() => () => {
-    stopEdgeScroll();
-    clearAutoExpandTimer();
-  }, [clearAutoExpandTimer, stopEdgeScroll]);
-
-  useEffect(() => {
-    const trackPointer = (event: PointerEvent) => {
-      pointerClientY.current = event.clientY;
-    };
-    window.addEventListener("pointermove", trackPointer, { capture: true, passive: true });
-    return () => window.removeEventListener("pointermove", trackPointer, { capture: true });
-  }, []);
+  const {
+    sensors,
+    sidebarScrollRef,
+    draggedNode,
+    dropIndicator,
+    handleDragStart,
+    handleDragMove,
+    handleDragOver,
+    handleDragEnd,
+    clearDragState,
+  } = useExplorerDragDrop({
+    collections,
+    openFolderIds,
+    setOpenFolderIds,
+    onReorderItems,
+  });
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -348,14 +249,6 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
       )
   );
 
-  const filteredHistory = history.filter(
-    (item) =>
-      !effectiveSearch ||
-      [item.url, item.method].some((value) =>
-        value.toLowerCase().includes(effectiveSearch)
-      )
-  );
-
   // ── Collection create/rename ───────────────────────────────────────────────
 
   const handleCreateCollection = async () => {
@@ -375,33 +268,6 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
     }
     await onRenameCollection(collection.id, editingCollectionName.trim());
     setEditingCollectionId(null);
-  };
-
-  const refreshHistory = () => window.dispatchEvent(new Event("history-updated"));
-
-  const handleDeleteHistory = async (id: string) => {
-    try {
-      await deleteHistoryItem(id);
-      setHistoryContextMenu(null);
-      refreshHistory();
-    } catch (err) {
-      console.error("Failed to delete history item:", err);
-    }
-  };
-
-  const copyHistoryRequest = (item: HistoryItem) => {
-    void navigator.clipboard.writeText(
-      JSON.stringify(
-        {
-          method: item.method,
-          url: item.url,
-          body: item.body,
-          auth: item.auth,
-        },
-        null,
-        2
-      )
-    );
   };
 
   // ── Root folder create ─────────────────────────────────────────────────────
@@ -449,172 +315,6 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
   ) => {
     const saved = await onCreateRequest(collectionId, folderId);
     onSelectSavedRequest(saved);
-  };
-
-  // ── DnD handlers ──────────────────────────────────────────────────────────
-
-  const handleDragStart = (event: DragStartEvent) => {
-    const { active } = event;
-    const collectionId = active.data.current?.collectionId as string;
-    if ("clientY" in event.activatorEvent) {
-      pointerClientY.current = (event.activatorEvent as PointerEvent).clientY;
-    }
-    setDropIndicator(null);
-    stopEdgeScroll();
-    clearAutoExpandTimer();
-
-    const collection = collections.find((c) => c.id === collectionId);
-    if (!collection) return;
-
-    const tree = buildCollectionTree(collection);
-    // Find dragged node
-    const findNode = (nodes: TreeNode[]): TreeNode | null => {
-      for (const n of nodes) {
-        if (n.type === "folder" && n.folder.id === active.id) return n;
-        if (n.type === "request" && n.request.id === active.id) return n;
-        if (n.type === "folder") {
-          const found = findNode(n.children);
-          if (found) return found;
-        }
-      }
-      return null;
-    };
-    setDraggedNode(findNode(tree));
-  };
-
-  const getDropIndicator = (
-    event: DragPositionEvent
-  ): TreeDropIndicator | null => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return null;
-
-    const collectionId = active.data.current?.collectionId as string | undefined;
-    const collection = collections.find((c) => c.id === collectionId);
-    const pointerY = pointerClientY.current;
-    if (!collection || pointerY === null || over.rect.height <= 0) return null;
-
-    const targetId = over.id as string;
-    const targetIsFolder = collection.folders.some((folder) => folder.id === targetId);
-    return {
-      targetId,
-      intent: calculateDropIntent(pointerY, over.rect, targetIsFolder),
-    };
-  };
-
-  const updateControlledAutoScroll = (pointerY: number | null) => {
-    const container = sidebarScrollRef.current;
-    if (!container || pointerY === null) {
-      stopEdgeScroll();
-      return;
-    }
-
-    const rect = container.getBoundingClientRect();
-    if (pointerY < rect.top || pointerY > rect.bottom) {
-      stopEdgeScroll();
-      return;
-    }
-
-    const distanceFromTop = pointerY - rect.top;
-    const distanceFromBottom = rect.bottom - pointerY;
-    if (distanceFromTop < SIDEBAR_SCROLL_EDGE_PX) {
-      const intensity = 1 - distanceFromTop / SIDEBAR_SCROLL_EDGE_PX;
-      setEdgeScroll(-Math.max(2, intensity * SIDEBAR_SCROLL_MAX_SPEED));
-    } else if (distanceFromBottom < SIDEBAR_SCROLL_EDGE_PX) {
-      const intensity = 1 - distanceFromBottom / SIDEBAR_SCROLL_EDGE_PX;
-      setEdgeScroll(Math.max(2, intensity * SIDEBAR_SCROLL_MAX_SPEED));
-    } else {
-      stopEdgeScroll();
-    }
-  };
-
-  const handleDragMove = (event: DragMoveEvent) => {
-    const nextIndicator = getDropIndicator(event);
-    setDropIndicator((current) =>
-      current?.targetId === nextIndicator?.targetId && current?.intent === nextIndicator?.intent
-        ? current
-        : nextIndicator
-    );
-    updateAutoExpandTarget(event, nextIndicator);
-    updateControlledAutoScroll(pointerClientY.current);
-  };
-
-  const updateAutoExpandTarget = (
-    event: DragPositionEvent,
-    indicator: TreeDropIndicator | null
-  ) => {
-    if (!indicator || indicator.intent !== "inside") {
-      clearAutoExpandTimer();
-      return;
-    }
-
-    const overId = indicator.targetId;
-    const collectionId = event.active.data.current?.collectionId as string | undefined;
-    const collection = collections.find((c) => c.id === collectionId);
-    const isFolder = collection?.folders.some((f) => f.id === overId) ?? false;
-
-    // Only a collapsed folder's central "inside" zone can auto-expand.
-    if (!isFolder || openFolderIds[overId] !== false) {
-      clearAutoExpandTimer();
-      return;
-    }
-    if (autoExpandTimer.current?.folderId === overId) return;
-
-    clearAutoExpandTimer();
-    autoExpandTimer.current = {
-      folderId: overId,
-      timer: setTimeout(() => {
-        setOpenFolderIds((prev) => ({ ...prev, [overId]: true }));
-        autoExpandTimer.current = null;
-      }, 700),
-    };
-  };
-
-  const handleDragOver = (event: DragOverEvent) => {
-    const nextIndicator = getDropIndicator(event);
-    setDropIndicator(nextIndicator);
-    updateAutoExpandTarget(event, nextIndicator);
-  };
-
-  const clearDragState = () => {
-    clearAutoExpandTimer();
-    stopEdgeScroll();
-    setDraggedNode(null);
-    setDropIndicator(null);
-    pointerClientY.current = null;
-  };
-
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    const finalDropIndicator = getDropIndicator(event);
-    clearDragState();
-    if (!over || active.id === over.id || !finalDropIndicator) return;
-
-    const collectionId = active.data.current?.collectionId as string | undefined;
-    if (!collectionId) return;
-    const collection = collections.find((c) => c.id === collectionId);
-    if (!collection) return;
-
-    const draggedId = active.id as string;
-    const overId = over.id as string;
-
-    // Circular check: can't drop folder into its own descendant
-    const draggedType = active.data.current?.type as string;
-    if (draggedType === "folder") {
-      const descendants = getDescendantFolderIds(collection.folders, draggedId);
-      if (descendants.includes(overId) || overId === draggedId) return;
-    }
-
-    // Build updated tree
-    const tree = buildCollectionTree(collection);
-    const newTree = reorderTree(tree, draggedId, overId, finalDropIndicator.intent);
-    const orderItems = flattenTreeToOrderItems(newTree);
-
-    // Persist
-    try {
-      await onReorderItems(collectionId, orderItems);
-    } catch (err) {
-      console.error("Failed to reorder items:", err);
-    }
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -902,119 +602,13 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
 
         {/* ── History mode ──────────────────────────────────────────────────── */}
         {mode === "history" && (
-          <div className="flex-1" style={{ padding: '6px' }}>
-            <div className="mb-[1px] flex items-center justify-between gap-3 select-none text-[11px] font-bold tracking-wider text-zinc-300">
-              <span>REQUEST HISTORY</span>
-              {history.length > 0 && (
-                <button
-                  type="button"
-                  onClick={onClearHistory}
-                  className="shrink-0 rounded p-1 text-[10px] font-semibold normal-case tracking-normal text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-400"
-                  title="Clear History"
-                >
-                  Clear History
-                </button>
-              )}
-            </div>
-            {filteredHistory.length === 0 ? (
-              <div className="text-center text-zinc-500 text-xs py-6">
-                <p>No requests in history.</p>
-              </div>
-            ) : (
-              (() => {
-                const groups: Record<string, HistoryItem[]> = {};
-                filteredHistory.forEach((item) => {
-                  let g = "Recent";
-                  if (item.timestamp) {
-                    const d = new Date(item.timestamp);
-                    if (!isNaN(d.getTime())) {
-                      g = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-                    }
-                  }
-                  (groups[g] ??= []).push(item);
-                });
-
-                return (
-                  <div className="mt-0.5 pl-1">
-                    {Object.entries(groups).map(([label, items]) => {
-                      const expanded = openHistoryDateGroups[label] !== false;
-                      return (
-                    <div key={label} className="mb-0.5">
-                      <div
-                        onClick={() =>
-                          setOpenHistoryDateGroups((prev) => ({
-                            ...prev,
-                            [label]: prev[label] === undefined ? false : !prev[label],
-                          }))
-                        }
-                        className="flex min-h-[24px] cursor-pointer select-none items-center gap-1 rounded-md px-1 text-xs font-medium text-zinc-300 hover:bg-[#252525] hover:text-white"
-                      >
-                        <svg
-                          className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${expanded ? "rotate-90" : ""}`}
-                          fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-                        </svg>
-                        <span>{label}</span>
-                      </div>
-
-                      {expanded && (
-                        <div className="relative">
-                          {/* Vertical guide line */}
-                          <div className="absolute bottom-0 left-[10px] top-0 w-px bg-[#2e2e2e]" />
-
-                          {items.map((item) => {
-                            const isSel = selectedHistoryId === item.id;
-                            return (
-                              <div
-                                key={item.id}
-                                onClick={() => onSelectHistory(item)}
-                                onContextMenu={(event) => {
-                                  event.preventDefault();
-                                  event.stopPropagation();
-                                  setHistoryContextMenu({ id: item.id, x: event.clientX, y: event.clientY });
-                                }}
-                                className={`group relative z-10 flex min-h-[23px] w-full cursor-pointer items-center justify-between gap-1 rounded-md text-left transition-colors ${isSel
-                                  ? "bg-[#333333] text-white"
-                                  : "text-zinc-300 hover:bg-[#252525]"
-                                  }`}
-                                style={{ paddingLeft: '22px', paddingRight: '6px' }}
-                              >
-                                <div className="flex items-center gap-2 min-w-0 flex-1">
-                                  <MethodBadge method={item.method} compact />
-                                  <span className="truncate font-sans text-[11px]">{item.url}</span>
-                                </div>
-                                <div className={`${isSel ? "flex" : "hidden group-hover:flex"} shrink-0 items-center gap-0.5`}>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setHistoryContextMenu(
-                                        historyContextMenu?.id === item.id
-                                          ? null
-                                          : { id: item.id, x: e.clientX, y: e.clientY }
-                                      );
-                                    }}
-                                    className="rounded p-1 text-zinc-500 hover:text-zinc-100 hover:bg-[#303030] transition-colors"
-                                    title="Options"
-                                  >
-                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />
-                                    </svg>
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()
-            )}
-          </div>
+          <RequestHistoryPanel
+            history={history}
+            searchQuery={searchQuery}
+            selectedHistoryId={selectedHistoryId}
+            onSelectHistory={onSelectHistory}
+            onClearHistory={onClearHistory}
+          />
         )}
       </OverlayScrollArea>
 
@@ -1036,18 +630,6 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
         />
       )}
 
-      {historyContextMenu && (
-        <RequestContextMenu
-          x={historyContextMenu.x}
-          y={historyContextMenu.y}
-          onClose={() => setHistoryContextMenu(null)}
-          onCopy={() => {
-            const item = history.find((entry) => entry.id === historyContextMenu.id);
-            if (item) copyHistoryRequest(item);
-          }}
-          onDelete={() => void handleDeleteHistory(historyContextMenu.id)}
-        />
-      )}
     </aside>
   );
 };

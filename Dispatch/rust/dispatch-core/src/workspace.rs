@@ -1,12 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use thiserror::Error;
+
+use crate::ApiRequest;
 
 pub const WORKSPACE_FORMAT: &str = "dispatch-workspace";
 pub const WORKSPACE_SCHEMA_VERSION: u32 = 1;
-pub const MAX_OPENAPI_SIZE: usize = 10 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct WorkspaceManifest {
@@ -22,12 +22,15 @@ pub struct WorkspaceManifest {
 pub struct Folder {
     pub id: String,
     pub name: String,
+    #[serde(default)]
     pub collection_id: String,
     #[serde(default)]
     pub parent_folder_id: Option<String>,
     #[serde(default)]
     pub order: i64,
+    #[serde(default)]
     pub created_at: String,
+    #[serde(default)]
     pub updated_at: String,
 }
 
@@ -35,12 +38,14 @@ pub struct Folder {
 pub struct SavedRequest {
     pub id: String,
     pub name: String,
-    pub request: Value,
+    pub request: ApiRequest,
     #[serde(default)]
     pub folder_id: Option<String>,
     #[serde(default)]
     pub order: i64,
+    #[serde(default)]
     pub created_at: String,
+    #[serde(default)]
     pub updated_at: String,
 }
 
@@ -52,7 +57,9 @@ pub struct Collection {
     pub folders: Vec<Folder>,
     #[serde(default)]
     pub requests: Vec<SavedRequest>,
+    #[serde(default)]
     pub created_at: String,
+    #[serde(default)]
     pub updated_at: String,
 }
 
@@ -95,6 +102,47 @@ pub struct WorkspaceBundle {
     pub manifest: WorkspaceManifest,
     pub collections: CollectionsDocument,
     pub environments: EnvironmentsDocument,
+}
+
+pub fn create_workspace_bundle(
+    name: &str,
+    workspace_id: &str,
+    timestamp: &str,
+) -> Result<WorkspaceBundle, String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("Workspace name cannot be empty.".to_string());
+    }
+    if workspace_id.trim().is_empty() {
+        return Err("Workspace id cannot be empty.".to_string());
+    }
+    if timestamp.trim().is_empty() {
+        return Err("Workspace timestamp cannot be empty.".to_string());
+    }
+    Ok(WorkspaceBundle {
+        manifest: WorkspaceManifest {
+            format: WORKSPACE_FORMAT.into(),
+            schema_version: WORKSPACE_SCHEMA_VERSION,
+            id: workspace_id.into(),
+            name: name.into(),
+            created_at: timestamp.into(),
+            updated_at: timestamp.into(),
+        },
+        collections: CollectionsDocument {
+            schema_version: WORKSPACE_SCHEMA_VERSION,
+            workspace_id: workspace_id.into(),
+            revision: 0,
+            updated_at: timestamp.into(),
+            collections: Vec::new(),
+        },
+        environments: EnvironmentsDocument {
+            schema_version: WORKSPACE_SCHEMA_VERSION,
+            workspace_id: workspace_id.into(),
+            revision: 0,
+            updated_at: timestamp.into(),
+            environments: Vec::new(),
+        },
+    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -214,8 +262,13 @@ pub fn resolve_template(input: &str, variables: &HashMap<String, String>) -> Res
             value.push_str("{{");
             value.push_str(raw_token);
             value.push_str("}}");
-            if !key.is_empty() && !unresolved.iter().any(|item| item == key) {
-                unresolved.push(key.to_string());
+            let missing_name = if key.is_empty() {
+                "(empty variable name)"
+            } else {
+                key
+            };
+            if !unresolved.iter().any(|item| item == missing_name) {
+                unresolved.push(missing_name.to_string());
             }
         }
         remaining = &after_open[end + 2..];
@@ -223,45 +276,6 @@ pub fn resolve_template(input: &str, variables: &HashMap<String, String>) -> Res
     value.push_str(remaining);
 
     ResolveResult { value, unresolved }
-}
-
-pub fn parse_openapi(content: &str) -> Result<Value, String> {
-    if content.len() > MAX_OPENAPI_SIZE {
-        return Err("OpenAPI içeriği 10 MB sınırını aşıyor".to_string());
-    }
-    if content.trim().is_empty() {
-        return Err("OpenAPI içeriği boş olamaz".to_string());
-    }
-    let spec: Value = if content.trim_start().starts_with('{') {
-        serde_json::from_str(content).map_err(|error| format!("Geçersiz OpenAPI JSON: {error}"))?
-    } else {
-        serde_norway::from_str(content)
-            .map_err(|error| format!("Geçersiz OpenAPI YAML: {error}"))?
-    };
-    let version = spec
-        .get("openapi")
-        .and_then(Value::as_str)
-        .ok_or_else(|| "Dosyada OpenAPI versiyonu bulunamadı".to_string())?;
-    if !version.starts_with("3.0.") && !version.starts_with("3.1.") {
-        return Err(format!(
-            "Desteklenmeyen OpenAPI versiyonu {version}. Dispatch Web, OpenAPI 3.0.x ve 3.1.x destekliyor"
-        ));
-    }
-    if !spec.get("paths").is_some_and(Value::is_object) {
-        return Err("OpenAPI belgesinde geçerli bir paths alanı bulunamadı".to_string());
-    }
-    Ok(spec)
-}
-
-pub fn serialize_openapi_yaml(spec: &Value) -> Result<String, String> {
-    serde_norway::to_string(spec)
-        .map(|mut yaml| {
-            if !yaml.ends_with('\n') {
-                yaml.push('\n');
-            }
-            yaml
-        })
-        .map_err(|error| format!("OpenAPI YAML oluşturulamadı: {error}"))
 }
 
 fn parse_json<T: for<'de> Deserialize<'de>>(
@@ -313,6 +327,17 @@ mod tests {
     }
 
     #[test]
+    fn creates_a_consistent_empty_workspace_bundle() {
+        let bundle =
+            create_workspace_bundle(" Demo ", "workspace-1", "2026-01-01T00:00:00Z").unwrap();
+        assert_eq!(bundle.manifest.name, "Demo");
+        assert_eq!(bundle.collections.workspace_id, bundle.manifest.id);
+        assert_eq!(bundle.environments.workspace_id, bundle.manifest.id);
+        assert!(bundle.collections.collections.is_empty());
+        assert!(create_workspace_bundle("  ", "workspace-1", "now").is_err());
+    }
+
+    #[test]
     fn rejects_documents_from_another_workspace() {
         let collections = COLLECTIONS.replace("workspace-1", "workspace-2");
         let error = parse_and_validate(MANIFEST, &collections, ENVIRONMENTS).unwrap_err();
@@ -330,24 +355,5 @@ mod tests {
         let result = resolve_template("{{ baseUrl }}/users/{{missing}}", &variables);
         assert_eq!(result.value, "https://example.com/users/{{missing}}");
         assert_eq!(result.unresolved, vec!["missing"]);
-    }
-
-    #[test]
-    fn parses_openapi_yaml_and_json() {
-        let yaml =
-            parse_openapi("openapi: 3.1.0\ninfo:\n  title: Demo\n  version: 1.0.0\npaths: {}\n")
-                .unwrap();
-        assert_eq!(yaml["info"]["title"], "Demo");
-
-        let json = parse_openapi(
-            r#"{"openapi":"3.0.3","info":{"title":"JSON","version":"1"},"paths":{}}"#,
-        )
-        .unwrap();
-        assert_eq!(json["openapi"], "3.0.3");
-        assert!(
-            serialize_openapi_yaml(&json)
-                .unwrap()
-                .contains("openapi: 3.0.3")
-        );
     }
 }

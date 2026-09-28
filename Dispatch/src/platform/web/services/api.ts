@@ -1,18 +1,24 @@
 import { sendBrowserRequest } from "../adapters/http/browserHttpClient";
+import { bytesToBase64, decodeResponseText, isUtf8 } from "../adapters/http/responseBody";
 import type { ApiRequest } from "../../../types/request";
 import type { ApiResponse } from "../../../types/response";
-import { resolveHttpSettings } from "../../../types/httpSettings";
 import { loadGlobalHttpSettings } from "./httpSettingsService";
+import { classifyResponseBodyCore, prepareRequestCore } from "./wasmClient";
 
 export async function sendRequest(request: ApiRequest): Promise<ApiResponse> {
   const globalSettings = await loadGlobalHttpSettings();
-  const settings = resolveHttpSettings(globalSettings, request.settings);
-  const response = await sendBrowserRequest(request, settings);
+  const prepared = await prepareRequestCore(request, globalSettings);
+  const response = await sendBrowserRequest(prepared);
+  const bodyKind = await classifyResponseBodyCore(
+    response.contentType,
+    isUtf8(response.bytes),
+    response.bytes.byteLength === 0,
+  );
   return {
     status: response.status,
     response_time_ms: response.responseTimeMs,
-    body: response.body,
-    body_base64: response.bodyBase64,
+    body: bodyKind === "text" ? decodeResponseText(response.bytes, response.contentType) : "",
+    body_base64: bodyKind === "binary" ? bytesToBase64(response.bytes) : undefined,
     body_size: response.sizeBytes,
     headers: response.headers,
     cookies: [],

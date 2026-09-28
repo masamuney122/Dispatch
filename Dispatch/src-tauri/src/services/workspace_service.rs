@@ -35,9 +35,12 @@ pub fn create_workspace(root: &Path, name: &str) -> Result<WorkspaceSession, Str
             .map_err(|error| format!("Failed to create workspace directory: {error}"))?;
     }
 
-    let manifest = WorkspaceManifest::new(name.to_string());
-    let collections = CollectionsDocument::empty(manifest.id.clone());
-    let environments = EnvironmentsDocument::empty(manifest.id.clone());
+    let now = chrono::Utc::now().to_rfc3339();
+    let bundle =
+        dispatch_core::create_workspace_bundle(name, &uuid::Uuid::new_v4().to_string(), &now)?;
+    let manifest = bundle.manifest;
+    let collections = bundle.collections;
+    let environments = bundle.environments;
 
     write_json_atomic(
         &root.join(WORKSPACE_MANIFEST_FILE),
@@ -96,7 +99,7 @@ pub fn open_workspace(root: &Path) -> Result<WorkspaceSession, String> {
         "environments document",
     )?;
 
-    dispatch_web_core::parse_and_validate(
+    dispatch_core::parse_and_validate(
         &serde_json::to_string(&manifest)
             .map_err(|error| format!("Failed to validate workspace manifest: {error}"))?,
         &serde_json::to_string(&collections)

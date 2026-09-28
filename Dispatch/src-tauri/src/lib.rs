@@ -63,6 +63,7 @@ pub fn run() {
             commands::archive_command::inspect_workspace_archive,
             commands::archive_command::import_workspace_archive,
             commands::request_command::send_request,
+            commands::request_command::resolve_request_variables,
             commands::oauth_command::get_authorization_code_token,
             commands::openapi_command::inspect_openapi,
             commands::openapi_command::import_openapi,

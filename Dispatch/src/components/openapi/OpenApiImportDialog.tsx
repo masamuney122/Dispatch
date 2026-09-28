@@ -73,7 +73,11 @@ export function OpenApiImportDialog({
       const result = await onInspect(source);
       setPreview(result);
       setCollectionName(result.title);
-      setSelectedServer(result.servers[0] || "");
+      const singleStaticServer =
+        result.servers.length === 1 && !result.servers[0].includes("{")
+          ? result.servers[0]
+          : "";
+      setSelectedServer(singleStaticServer);
       setCreateEnvironment(result.servers.length > 0);
       setEnvironmentName(`${result.title} Environment`);
     } catch (inspectFailure) {
@@ -198,6 +202,7 @@ export function OpenApiImportDialog({
                   onChange={(event) => setSelectedServer(event.target.value)}
                   className={inputClass}
                 >
+                  <option value="">Belgedeki server kapsamlarını koru (önerilen)</option>
                   {preview.servers.map((server) => <option key={server}>{server}</option>)}
                 </select>
               ) : (

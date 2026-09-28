@@ -55,7 +55,7 @@ export const UrlActionBar: React.FC<UrlActionBarProps> = ({
 
   return (
     <div className="flex flex-col gap-2 font-sans select-none shrink-0">
-      {/* Üst Sıra: Başlık ve Sağ Aksiyon Butonları (Save v, Share, Link) */}
+      {/* Üst Sıra: Başlık ve Save aksiyonu */}
       <div className="flex items-center justify-between text-xs">
         <div className="flex items-center gap-1.5 text-zinc-100 font-bold">
           {breadcrumbItems.map((item, index) => (
@@ -96,38 +96,22 @@ export const UrlActionBar: React.FC<UrlActionBarProps> = ({
           )}
         </div>
 
-        <div className="flex items-center gap-2.5">
-          {/* Save Butonu (Dropdown without panel) */}
-          <div className="flex items-center text-xs font-semibold text-zinc-400">
-            <button onClick={onSave} className="px-3 py-1.5 hover:text-zinc-100 hover:bg-[#2a2a2a] rounded-l-md transition-colors flex items-center gap-1.5">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-              </svg>
-              <span>Save</span>
-            </button>
-            <button className="px-1.5 py-1.5 hover:text-zinc-100 hover:bg-[#2a2a2a] rounded-r-md transition-colors flex items-center justify-center">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Share Butonu */}
-          <button className="px-3 py-1.5 rounded-md text-xs font-semibold text-zinc-400 hover:text-zinc-100 hover:bg-[#2a2a2a] transition-colors">
-            Share
-          </button>
-
-          {/* Bağlantı (Link/Copy) Butonu */}
-          <button className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-100 hover:bg-[#2a2a2a] transition-colors" title="Copy link">
+        <div className="flex items-center">
+          <button
+            type="button"
+            onClick={onSave}
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-zinc-400 transition-colors hover:bg-[#2a2a2a] hover:text-zinc-100"
+          >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
             </svg>
+            <span>Save</span>
           </button>
         </div>
       </div>
 
       {/* Alt Sıra: Metod + URL Bar ve Send Butonu (Arasında ferah gap-4) */}
-      <div className="flex items-stretch gap-3 h-9">
+      <div className="flex h-[34px] items-stretch gap-3">
         {/* Metod + URL Giriş Kutusu */}
         <div className="flex-1 flex items-stretch border border-[#555555] bg-[#242424] rounded-lg overflow-hidden focus-within:border-[#7aa2f7] transition-all">
           {/* Metod Seçici */}

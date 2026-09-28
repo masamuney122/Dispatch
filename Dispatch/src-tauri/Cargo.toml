@@ -39,4 +39,4 @@ uuid = { version = "1", features = ["v4"] }
 tauri-plugin-dialog = "2"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 serde_norway = "0.9"
-dispatch-web-core = { path = "../rust/dispatch-web-core" }
+dispatch-core = { path = "../rust/dispatch-core" }

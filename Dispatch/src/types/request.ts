@@ -1,5 +1,5 @@
 import type { AuthConfig } from "./auth";
-import type { RequestHttpSettings } from "./httpSettings";
+import type { GlobalHttpSettings, RequestHttpSettings } from "./httpSettings";
 import type { RequestScripts } from "./script";
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
@@ -38,4 +38,17 @@ export interface ApiRequest {
   auth?: AuthConfig;
   settings?: RequestHttpSettings;
   scripts?: RequestScripts;
+}
+
+export type PreparedBody =
+  | { kind: "none" }
+  | { kind: "text"; value: string }
+  | { kind: "form-data"; fields: BodyField[] }
+  | { kind: "url-encoded"; value: string }
+  | { kind: "binary"; data_base64: string };
+
+export interface PreparedRequest {
+  request: ApiRequest;
+  body: PreparedBody;
+  settings: GlobalHttpSettings;
 }

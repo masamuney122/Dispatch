@@ -43,7 +43,15 @@ export async function exportCollectionOpenApi(
     defaultPath: `${collection.name.replace(/[^a-zA-Z0-9._-]+/g, "-")}.${extension}`,
     filters: [{ name: `OpenAPI ${extension.toUpperCase()}`, extensions: [extension] }],
   });
-  if (!path) return { endpoint_count: 0, warnings: [], cancelled: true };
+  if (!path) {
+    return {
+      request_count: 0,
+      endpoint_count: 0,
+      grouped_request_count: 0,
+      warnings: [],
+      cancelled: true,
+    };
+  }
   return invoke<OpenApiExportResult>("export_collection_openapi", {
     collectionId: collection.id,
     path,

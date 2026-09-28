@@ -1,17 +1,17 @@
-use base64::Engine;
-use reqwest::header::CONTENT_TYPE;
-
-use crate::models::request::{ApiRequest, HttpVersionPreference, RequestBodyType};
 use crate::models::response::ApiResponse;
 use crate::models::workspace::GlobalHttpSettings;
+use dispatch_core::{prepare_request, ApiRequest};
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
 use crate::services::cookie_service::ManagedCookieJar;
 
-const SUPPORTED_METHODS: [&str; 7] = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
+mod request_builder;
+mod response;
+
+use request_builder::{build_client, build_request};
+use response::into_api_response;
 
 pub async fn send_request(request: ApiRequest) -> Result<ApiResponse, String> {
     send_request_with_settings(request, &GlobalHttpSettings::default()).await
@@ -29,223 +29,19 @@ pub async fn send_request_with_cookie_jar(
     global_settings: &GlobalHttpSettings,
     cookie_jar: Option<Arc<ManagedCookieJar>>,
 ) -> Result<ApiResponse, String> {
+    let prepared = prepare_request(&request, global_settings)?;
     let start = Instant::now();
-    let method = request.method.to_uppercase();
-
-    if !SUPPORTED_METHODS.contains(&method.as_str()) {
-        return Err(format!("Unsupported HTTP method: {}", request.method));
-    }
-
-    let http_version = request
-        .settings
-        .http_version
-        .unwrap_or(global_settings.http_version);
-    let verify_ssl = request
-        .settings
-        .verify_ssl
-        .unwrap_or(global_settings.verify_ssl);
-    let follow_redirects = request
-        .settings
-        .follow_redirects
-        .unwrap_or(global_settings.follow_redirects);
-    let remove_referer = request
-        .settings
-        .remove_referer_on_redirect
-        .unwrap_or(global_settings.remove_referer_on_redirect);
-    let max_redirects = request
-        .settings
-        .max_redirects
-        .unwrap_or(global_settings.max_redirects)
-        .clamp(1, 100);
-
-    let redirect_policy = if follow_redirects {
-        reqwest::redirect::Policy::limited(max_redirects)
-    } else {
-        reqwest::redirect::Policy::none()
-    };
-    let mut client_builder = reqwest::Client::builder()
-        .danger_accept_invalid_certs(!verify_ssl)
-        .referer(!remove_referer)
-        .redirect(redirect_policy);
-    if let Some(cookie_jar) = cookie_jar {
-        client_builder = client_builder.cookie_provider(cookie_jar);
-    }
-    client_builder = match http_version {
-        HttpVersionPreference::Auto => client_builder,
-        HttpVersionPreference::Http1 => client_builder.http1_only(),
-        HttpVersionPreference::Http2 => client_builder.http2_prior_knowledge(),
-    };
-    let client = client_builder
-        .build()
-        .map_err(|error| format!("HTTP client could not be configured: {error}"))?;
-    let mut builder = client.request(
-        reqwest::Method::from_bytes(method.as_bytes()).map_err(|error| error.to_string())?,
-        &request.url,
-    );
-
-    for (key, value) in &request.headers {
-        builder = builder.header(key, value);
-    }
-
-    if let Some(auth) = request.auth.clone() {
-        builder = auth.apply(builder);
-    }
-
-    builder = apply_body(builder, &request)?;
-
+    let client = build_client(&prepared.settings, cookie_jar)?;
+    let builder = build_request(&client, &prepared.request, &prepared.body)?;
     let response = builder.send().await.map_err(|error| error.to_string())?;
-    let status_code = response.status().as_u16();
-    let response_headers: HashMap<String, String> = response
-        .headers()
-        .iter()
-        .map(|(name, value)| {
-            (
-                name.to_string(),
-                value.to_str().unwrap_or("<binary>").to_string(),
-            )
-        })
-        .collect();
-    let content_type = response_headers
-        .iter()
-        .find(|(name, _)| name.eq_ignore_ascii_case(CONTENT_TYPE.as_str()))
-        .map(|(_, value)| value.as_str());
-    let bytes = response.bytes().await.map_err(|error| error.to_string())?;
-    let body_size = bytes.len();
-    let should_decode_as_text = content_type.is_some_and(is_textual_content_type)
-        || (content_type.is_none() && std::str::from_utf8(&bytes).is_ok());
-    let (body, body_base64) = if should_decode_as_text {
-        (String::from_utf8_lossy(&bytes).into_owned(), None)
-    } else if bytes.is_empty() {
-        (String::new(), None)
-    } else {
-        (
-            String::new(),
-            Some(base64::engine::general_purpose::STANDARD.encode(&bytes)),
-        )
-    };
-
-    Ok(ApiResponse {
-        status: status_code,
-        response_time_ms: start.elapsed().as_millis(),
-        body,
-        body_base64,
-        body_size,
-        headers: response_headers,
-        cookies: Vec::new(),
-        cookie_handling: "workspace".to_string(),
-    })
-}
-
-fn is_textual_content_type(content_type: &str) -> bool {
-    let mime = content_type
-        .split(';')
-        .next()
-        .unwrap_or_default()
-        .trim()
-        .to_ascii_lowercase();
-    mime.starts_with("text/")
-        || mime.ends_with("+json")
-        || mime.ends_with("+xml")
-        || matches!(
-            mime.as_str(),
-            "application/json"
-                | "application/xml"
-                | "application/javascript"
-                | "application/x-javascript"
-                | "application/graphql"
-                | "application/sql"
-                | "application/x-www-form-urlencoded"
-                | "image/svg+xml"
-        )
-}
-
-fn apply_body(
-    mut builder: reqwest::RequestBuilder,
-    request: &ApiRequest,
-) -> Result<reqwest::RequestBuilder, String> {
-    let has_content_type = request
-        .headers
-        .keys()
-        .any(|key| key.eq_ignore_ascii_case(CONTENT_TYPE.as_str()));
-
-    match request.body_type {
-        RequestBodyType::None => {}
-        RequestBodyType::Json => {
-            if !has_content_type {
-                builder = builder.header(CONTENT_TYPE, "application/json");
-            }
-            builder = builder.body(request.body.clone());
-        }
-        RequestBodyType::Text => {
-            if !has_content_type {
-                builder = builder.header(CONTENT_TYPE, "text/plain; charset=utf-8");
-            }
-            builder = builder.body(request.body.clone());
-        }
-        RequestBodyType::Html => {
-            if !has_content_type {
-                builder = builder.header(CONTENT_TYPE, "text/html; charset=utf-8");
-            }
-            builder = builder.body(request.body.clone());
-        }
-        RequestBodyType::Xml => {
-            if !has_content_type {
-                builder = builder.header(CONTENT_TYPE, "application/xml");
-            }
-            builder = builder.body(request.body.clone());
-        }
-        RequestBodyType::FormData => {
-            let form = request
-                .form_fields
-                .iter()
-                .filter(|field| !field.key.trim().is_empty())
-                .fold(reqwest::multipart::Form::new(), |form, field| {
-                    form.text(field.key.clone(), field.value.clone())
-                });
-            builder = builder.multipart(form);
-        }
-        RequestBodyType::XWwwFormUrlencoded => {
-            let encoded = url::form_urlencoded::Serializer::new(String::new())
-                .extend_pairs(
-                    request
-                        .form_fields
-                        .iter()
-                        .filter(|field| !field.key.trim().is_empty())
-                        .map(|field| (field.key.as_str(), field.value.as_str())),
-                )
-                .finish();
-            if !has_content_type {
-                builder = builder.header(CONTENT_TYPE, "application/x-www-form-urlencoded");
-            }
-            builder = builder.body(encoded);
-        }
-        RequestBodyType::Binary => {
-            let binary = request
-                .binary
-                .as_ref()
-                .ok_or("Choose a binary file before sending the request.")?;
-            let bytes = base64::engine::general_purpose::STANDARD
-                .decode(&binary.data_base64)
-                .map_err(|error| format!("Invalid binary payload: {error}"))?;
-            if !has_content_type {
-                let mime_type = if binary.mime_type.is_empty() {
-                    "application/octet-stream"
-                } else {
-                    &binary.mime_type
-                };
-                builder = builder.header(CONTENT_TYPE, mime_type);
-            }
-            builder = builder.body(bytes);
-        }
-    }
-
-    Ok(builder)
+    into_api_response(response, start).await
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::request::{BinaryBody, BodyField, RequestHttpSettings};
+    use dispatch_core::{BinaryBody, BodyField, RequestBodyType, RequestHttpSettings};
+    use std::collections::HashMap;
     use std::io::{Read, Write};
     use std::net::TcpListener;
     use std::sync::mpsc::{self, Receiver};

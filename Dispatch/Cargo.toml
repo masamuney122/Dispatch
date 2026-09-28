@@ -1,6 +1,6 @@
 [workspace]
 members = [
-  "rust/dispatch-web-core",
+  "rust/dispatch-core",
   "rust/dispatch-web-wasm",
 ]
 exclude = ["src-tauri"]

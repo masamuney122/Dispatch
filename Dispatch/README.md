@@ -99,7 +99,11 @@ React UI / hooks / ortak TypeScript modelleri
   Rust + reqwest          IndexedDB/LocalStorage/WASM
 ```
 
-Web tarafındaki workspace doğrulama ve OpenAPI yardımcıları Rust'tan WASM'e derlenir. Masaüstündeki native HTTP, filesystem, OAuth callback listener, cookie jar ve archive işlemleri `src-tauri` içinde kalır.
+Platformdan bağımsız request hazırlama, workspace/collection/environment kuralları ve
+OpenAPI dönüşümleri `dispatch-core` içinde bir kez yazılır. Web bu core'u ince,
+alanlara ayrılmış adapter'lar üzerinden WASM olarak; masaüstü ise doğrudan native
+Rust bağımlılığı olarak çağırır. Native HTTP, filesystem, OAuth callback listener,
+cookie jar ve archive işlemleri `src-tauri` içinde kalır.
 
 Daha ayrıntılı mimari belgeleri:
 
@@ -454,7 +458,16 @@ Import sırasında:
 - Seçilen server URL'i için environment oluşturulabilir.
 - Request body örnekleri ve desteklenen authentication scheme'leri Dispatch modeline dönüştürülür.
 
-Collection, OpenAPI JSON veya YAML olarak dışa aktarılabilir. OpenAPI standardı pre-request/post-response script alanlarını tanımlamadığı için Dispatch scriptleri OpenAPI import/export işleminde taşınmaz.
+Collection, OpenAPI 3.0.3 JSON veya YAML olarak dışa aktarılabilir. Exporter:
+
+- Mutlak request URL'lerindeki origin bilgisini operation-level `servers` alanında korur; bir collection içinde `httpbin.org`, `localhost` ve başka hostlar birlikte bulunabilir.
+- Başta bulunan `{{Base_Url}}` benzeri environment değişkenlerini büyük/küçük harfe veya sabit bir değişken adına bağlı olmadan OpenAPI server variable'a dönüştürür. OpenAPI server variable için default değer zorunlu olduğundan, export ekranında override verilmemiş çözülmemiş değişkenlere `http://localhost` placeholder'ı ve uyarı eklenir.
+- Aynı method/path'e sahip requestleri geçerli olmayan ikinci operation'lar üretmeden tek operation altında parameter/body örnekleri olarak gruplar. Kaynak request adları `x-dispatch-request-names`, temel request metadata'sı `x-dispatch-requests`, sayıları `x-dispatch-request-count` alanında tutulur ve export sonucu gruplama sayısını raporlar.
+- Tekrarlanan query anahtarlarını OpenAPI array parametresine, binary body'leri `string/binary` şemasına ve `/status/{code}` testlerini ilgili expected response koduna dönüştürür.
+- Farklı API key konumları ve OAuth flow/endpoint kombinasyonları için çakışmayan security scheme adları üretir.
+- Dispatch'e özgü request settings ve folder bilgisini `x-dispatch-*` extension alanlarında taşır.
+
+OpenAPI standardı pre-request/post-response script alanlarını ve Postman/Dispatch environment modelini tanımlamaz. Script kaynakları export edilmez ve exporter bunu açık bir uyarıyla raporlar. OpenAPI aynı path ve HTTP methodu için yalnızca tek operation'a izin verdiğinden, gruplandırılan örnekler Postman gibi üçüncü taraf araçlarda ayrı request olarak görünmeyebilir; kayıpsız Dispatch yedeği için `.dispatch` archive kullanılmalıdır.
 
 Web implementasyonu parse/doğrulama için Rust/WASM, masaüstü implementasyonu native Rust kullanır.
 
@@ -564,7 +577,7 @@ Dispatch/
 │   ├── hooks/                  Ortak state ve yaşam döngüsü
 │   ├── platform/
 │   │   ├── desktop/services/   Tauri adapter'ları
-│   │   └── web/                Browser/WASM adapter'ları
+│   │   └── web/                Browser adapter'ları ve alan bazlı WASM istemcileri
 │   ├── services/               Platform-neutral facade'lar
 │   ├── types/                  Ortak TypeScript modelleri
 │   ├── utils/                  UI/model yardımcıları
@@ -572,11 +585,11 @@ Dispatch/
 ├── src-tauri/
 │   └── src/
 │       ├── commands/           Tauri command handler'ları
-│       ├── models/             Rust modelleri
+│       ├── models/             Desktop runtime modelleri ve core re-export'ları
 │       └── services/           HTTP, storage, cookie, archive, OpenAPI
 ├── rust/
-│   ├── dispatch-web-core/      Saf Rust web ortak mantığı
-│   └── dispatch-web-wasm/      wasm-bindgen köprüsü
+│   ├── dispatch-core/          Platformdan bağımsız modeller ve iş kuralları
+│   └── dispatch-web-wasm/      Core için ince wasm-bindgen köprüsü
 ├── public/                     Branding, PWA manifest ve service worker
 ├── docs/                       Ayrıntılı mimari belgeleri
 ├── vite.config.ts              Build-mode platform alias seçimi

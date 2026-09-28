@@ -10,50 +10,31 @@ interface RequestContextMenuProps {
   onDelete: () => void;
 }
 
-const BackspaceIcon = () => (
-  <svg style={{ width: "16px", height: "16px" }} className="shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9l4 4m0-4l-4 4m-4-6h11a2 2 0 012 2v8a2 2 0 01-2 2H8l-5-6 5-6z" />
-  </svg>
-);
-
 const MenuItem = ({
   onClick,
   danger,
-  shortcutText,
-  shortcutIcon,
   children,
 }: {
   onClick: () => void;
   danger?: boolean;
-  shortcutText?: string;
-  shortcutIcon?: React.ReactNode;
   children: React.ReactNode;
 }) => (
-  <div style={{ padding: "2px 6px" }}>
+  <div style={{ padding: "1px 4px" }}>
     <button
       onClick={onClick}
-      className={`flex w-full items-center justify-between rounded-md text-left transition-colors hover:bg-zinc-800 ${danger ? "text-red-400" : "text-zinc-200"}`}
+      className={`flex w-full items-center rounded-md text-left transition-colors hover:bg-zinc-800 ${danger ? "text-red-400" : "text-zinc-200"}`}
       style={{
         fontSize: "13px",
-        padding: "6px 12px",
+        padding: "5px 10px",
       }}
     >
-      <span>{children}</span>
-      {(shortcutText || shortcutIcon) && (
-        <span
-          className="flex items-center text-[#888888]"
-          style={{ fontFamily: "sans-serif", letterSpacing: "0.025em" }}
-        >
-          {shortcutText}
-          {shortcutIcon}
-        </span>
-      )}
+      {children}
     </button>
   </div>
 );
 
 const Divider = () => (
-  <div className="border-t border-zinc-700" style={{ margin: "6px 16px" }} />
+  <div className="border-t border-zinc-700" style={{ margin: "4px 10px" }} />
 );
 
 export const RequestContextMenu: React.FC<RequestContextMenuProps> = ({
@@ -86,8 +67,8 @@ export const RequestContextMenu: React.FC<RequestContextMenuProps> = ({
     action();
     onClose();
   };
-  const menuWidth = 240;
-  const menuHeight = onRename || onDuplicate ? 210 : 132;
+  const menuWidth = 136;
+  const menuHeight = onRename || onDuplicate ? 132 : 76;
   const clampedX = Math.min(x, window.innerWidth - menuWidth - 8);
   const clampedY = Math.min(y, window.innerHeight - menuHeight - 8);
 
@@ -98,29 +79,29 @@ export const RequestContextMenu: React.FC<RequestContextMenuProps> = ({
       style={{
         left: clampedX,
         top: clampedY,
-        width: "170px",
-        padding: "6px 0",
+        width: `${menuWidth}px`,
+        padding: "4px 0",
       }}
       onClick={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
     >
       {onRename && (
-        <MenuItem onClick={run(onRename)} shortcutText="⌘E">
+        <MenuItem onClick={run(onRename)}>
           Rename
         </MenuItem>
       )}
-      <MenuItem onClick={run(onCopy)} shortcutText="⌘C">
+      <MenuItem onClick={run(onCopy)}>
         Copy
       </MenuItem>
       {onDuplicate && (
-        <MenuItem onClick={run(onDuplicate)} shortcutText="⌘D">
+        <MenuItem onClick={run(onDuplicate)}>
           Duplicate
         </MenuItem>
       )}
 
       <Divider />
 
-      <MenuItem onClick={run(onDelete)} danger shortcutIcon={<BackspaceIcon />}>
+      <MenuItem onClick={run(onDelete)} danger>
         Delete
       </MenuItem>
     </div>
