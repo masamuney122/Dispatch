@@ -22,6 +22,10 @@ import type {
 } from "../../types/runner";
 import { collectionRequestsInRunOrder } from "../../utils/collectionRunOrder";
 import { parseIterationDataFile } from "../../utils/iterationData";
+import {
+  PERFORMANCE_CONDITION_OPTIONS,
+  PERFORMANCE_METRIC_OPTIONS,
+} from "../../utils/performanceRunner";
 import { OverlayScrollArea } from "../common/OverlayScrollArea";
 import type { OrderedRunnerRequest, RunnerRequestSelection } from "../../types/runner";
 
@@ -340,22 +344,117 @@ export const RunnerConfigurationView: React.FC<RunnerConfigurationProps> = ({
                 </div>
               </>
             ) : (
-              <div className="grid grid-cols-2 gap-3">
-                <label>
-                  <span className="mb-1.5 block font-semibold text-zinc-300">Duration (seconds)</span>
-                  <RunnerNumberInput value={configuration.performanceDurationSeconds} min={1} max={3600} onChange={(performanceDurationSeconds) => update({ performanceDurationSeconds })} className="h-9 w-full rounded-md border border-[#444] bg-[#222] px-3 font-mono text-zinc-200 outline-none focus:border-[#ff6c37]" />
-                </label>
-                <label>
-                  <span className="mb-1.5 block font-semibold text-zinc-300">Virtual users</span>
-                  <RunnerNumberInput value={configuration.virtualUsers} min={1} max={50} onChange={(virtualUsers) => update({ virtualUsers })} className="h-9 w-full rounded-md border border-[#444] bg-[#222] px-3 font-mono text-zinc-200 outline-none focus:border-[#ff6c37]" />
-                </label>
-                <label className="col-span-2">
-                  <span className="mb-1.5 block font-semibold text-zinc-300">Load profile</span>
-                  <select value={configuration.loadProfile} onChange={(event) => update({ loadProfile: event.target.value as RunnerConfiguration["loadProfile"] })} className="h-9 w-full rounded-md border border-[#444] bg-[#222] px-3 text-zinc-200 outline-none focus:border-[#ff6c37]">
-                    <option value="fixed">Fixed load</option>
-                    <option value="ramp-up">Ramp-up</option>
-                  </select>
-                </label>
+              <div className="space-y-5">
+                <div className="grid grid-cols-3 gap-3">
+                  <label>
+                    <span className="mb-1.5 block font-semibold text-zinc-300">Load profile</span>
+                    <select value={configuration.loadProfile} onChange={(event) => update({ loadProfile: event.target.value as RunnerConfiguration["loadProfile"] })} className="h-9 w-full rounded-md border border-[#444] bg-[#222] px-3 text-zinc-200 outline-none focus:border-[#ff6c37]">
+                      <option value="fixed">Fixed load</option>
+                      <option value="ramp-up">Ramp-up</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span className="mb-1.5 block font-semibold text-zinc-300">Virtual users</span>
+                    <RunnerNumberInput
+                      value={configuration.virtualUsers}
+                      min={1}
+                      max={50}
+                      onChange={(virtualUsers) => update({
+                        virtualUsers,
+                        initialLoad: Math.min(configuration.initialLoad, virtualUsers),
+                      })}
+                      className="h-9 w-full rounded-md border border-[#444] bg-[#222] px-3 font-mono text-zinc-200 outline-none focus:border-[#ff6c37]"
+                    />
+                  </label>
+                  <label>
+                    <span className="mb-1.5 block font-semibold text-zinc-300">Duration (seconds)</span>
+                    <RunnerNumberInput value={configuration.performanceDurationSeconds} min={1} max={3600} onChange={(performanceDurationSeconds) => update({ performanceDurationSeconds })} className="h-9 w-full rounded-md border border-[#444] bg-[#222] px-3 font-mono text-zinc-200 outline-none focus:border-[#ff6c37]" />
+                  </label>
+                </div>
+
+                {configuration.loadProfile === "ramp-up" && (
+                  <div className="rounded-lg border border-[#343434] bg-[#222222] p-3">
+                    <label className="block max-w-[220px]">
+                      <span className="mb-1.5 block font-semibold text-zinc-300">Initial load</span>
+                      <RunnerNumberInput
+                        value={configuration.initialLoad}
+                        min={1}
+                        max={configuration.virtualUsers}
+                        onChange={(initialLoad) => update({ initialLoad })}
+                        className="h-9 w-full rounded-md border border-[#444] bg-[#202020] px-3 font-mono text-zinc-200 outline-none focus:border-[#ff6c37]"
+                      />
+                    </label>
+                    <p className="mt-2 text-[10px] leading-4 text-zinc-500">
+                      {configuration.initialLoad} users start immediately, the load ramps to {configuration.virtualUsers} users between 25% and 50% of the run, then remains steady.
+                    </p>
+                  </div>
+                )}
+
+                <div className="border-t border-[#343434] pt-4">
+                  <Checkbox
+                    checked={configuration.performanceCriterion.enabled}
+                    onChange={(enabled) => update({
+                      performanceCriterion: {
+                        ...configuration.performanceCriterion,
+                        enabled,
+                      },
+                    })}
+                    label={<span className="font-semibold">Pass test if...</span>}
+                  />
+
+                  {configuration.performanceCriterion.enabled && (
+                    <div className="mt-3 grid grid-cols-2 gap-3 rounded-lg border border-[#343434] bg-[#222222] p-3">
+                      <label>
+                        <span className="mb-1.5 block font-semibold text-zinc-400">Metric</span>
+                        <select
+                          value={configuration.performanceCriterion.metric}
+                          onChange={(event) => update({
+                            performanceCriterion: {
+                              ...configuration.performanceCriterion,
+                              metric: event.target.value as RunnerConfiguration["performanceCriterion"]["metric"],
+                            },
+                          })}
+                          className="h-9 w-full rounded-md border border-[#444] bg-[#202020] px-3 text-zinc-200 outline-none focus:border-[#ff6c37]"
+                        >
+                          {PERFORMANCE_METRIC_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                        </select>
+                      </label>
+                      <label>
+                        <span className="mb-1.5 block font-semibold text-zinc-400">Condition</span>
+                        <select
+                          value={configuration.performanceCriterion.condition}
+                          onChange={(event) => update({
+                            performanceCriterion: {
+                              ...configuration.performanceCriterion,
+                              condition: event.target.value as RunnerConfiguration["performanceCriterion"]["condition"],
+                            },
+                          })}
+                          className="h-9 w-full rounded-md border border-[#444] bg-[#202020] px-3 text-zinc-200 outline-none focus:border-[#ff6c37]"
+                        >
+                          {PERFORMANCE_CONDITION_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                        </select>
+                      </label>
+                      <label className="col-span-2">
+                        <span className="mb-1.5 block font-semibold text-zinc-400">Value</span>
+                        <div className="flex h-9 overflow-hidden rounded-md border border-[#444] bg-[#202020] focus-within:border-[#ff6c37]">
+                          <RunnerNumberInput
+                            value={configuration.performanceCriterion.value}
+                            min={1}
+                            max={3_600_000}
+                            onChange={(value) => update({
+                              performanceCriterion: {
+                                ...configuration.performanceCriterion,
+                                value,
+                              },
+                            })}
+                            className="min-w-0 flex-1 bg-transparent px-3 font-mono text-zinc-200 outline-none"
+                          />
+                          <span className="flex items-center border-l border-[#3a3a3a] px-3 text-zinc-500">ms</span>
+                        </div>
+                      </label>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

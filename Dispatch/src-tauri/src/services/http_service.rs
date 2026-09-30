@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::services::cookie_service::ManagedCookieJar;
+use reqwest::cookie::CookieStore as _;
 
 mod request_builder;
 mod response;
@@ -31,10 +32,10 @@ pub async fn send_request_with_cookie_jar(
 ) -> Result<ApiResponse, String> {
     let prepared = prepare_request(&request, global_settings)?;
     let start = Instant::now();
-    let client = build_client(&prepared.settings, cookie_jar)?;
+    let client = build_client(&prepared.settings, cookie_jar.clone())?;
     let builder = build_request(&client, &prepared.request, &prepared.body)?;
     let request = builder.build().map_err(|error| error.to_string())?;
-    let request_headers = request
+    let mut request_headers = request
         .headers()
         .iter()
         .map(|(name, value)| {
@@ -43,7 +44,19 @@ pub async fn send_request_with_cookie_jar(
                 value.to_str().unwrap_or("<binary>").to_string(),
             )
         })
-        .collect();
+        .collect::<std::collections::HashMap<_, _>>();
+    if let Some(host) = request_host(request.url()) {
+        request_headers.entry("host".to_string()).or_insert(host);
+    }
+    if let Some(cookie) = cookie_jar
+        .as_ref()
+        .and_then(|jar| jar.cookies(request.url()))
+        .and_then(|value| value.to_str().ok().map(str::to_owned))
+    {
+        request_headers
+            .entry("cookie".to_string())
+            .or_insert(cookie);
+    }
     let response = client
         .execute(request)
         .await
@@ -52,6 +65,20 @@ pub async fn send_request_with_cookie_jar(
         into_api_response(response, start, prepared.settings.max_response_size_mb).await?;
     response.request_headers = request_headers;
     Ok(response)
+}
+
+fn request_host(url: &reqwest::Url) -> Option<String> {
+    let host = url.host_str()?;
+    let mut authority = if host.contains(':') {
+        format!("[{host}]")
+    } else {
+        host.to_string()
+    };
+    if let Some(port) = url.port() {
+        authority.push(':');
+        authority.push_str(&port.to_string());
+    }
+    Some(authority)
 }
 
 #[cfg(test)]
@@ -220,6 +247,61 @@ mod tests {
                 .expect("captured request")
                 .starts_with(&format!("{method} / HTTP/1.1")));
         }
+    }
+
+    #[test]
+    fn reports_dispatch_default_and_wire_host_request_headers() {
+        let (url, received) = capture_one_request();
+        let response = tauri::async_runtime::block_on(send_request(request(
+            url,
+            "GET",
+            RequestBodyType::None,
+        )))
+        .expect("send request with defaults");
+        let wire = received.recv().expect("captured request");
+
+        assert_eq!(
+            response.request_headers.get("accept").map(String::as_str),
+            Some("*/*")
+        );
+        assert_eq!(
+            response
+                .request_headers
+                .get("accept-encoding")
+                .map(String::as_str),
+            Some("gzip, deflate, br, zstd")
+        );
+        assert_eq!(
+            response
+                .request_headers
+                .get("user-agent")
+                .map(String::as_str),
+            Some(concat!("Dispatch/", env!("CARGO_PKG_VERSION")))
+        );
+        assert!(response
+            .request_headers
+            .get("host")
+            .is_some_and(|host| host.contains(':')));
+        assert!(wire.contains("accept: */*"));
+        assert!(wire.contains("user-agent: Dispatch/"));
+    }
+
+    #[test]
+    fn preserves_repeated_response_header_values() {
+        let url = serve_one_response(
+            b"HTTP/1.1 200 OK\r\nVary: Origin\r\nVary: Access-Control-Request-Method\r\nVary: Access-Control-Request-Headers\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec(),
+        );
+        let response = tauri::async_runtime::block_on(send_request(request(
+            url,
+            "GET",
+            RequestBodyType::None,
+        )))
+        .expect("read repeated response headers");
+
+        assert_eq!(
+            response.headers.get("vary").map(String::as_str),
+            Some("Origin, Access-Control-Request-Method, Access-Control-Request-Headers")
+        );
     }
 
     #[test]

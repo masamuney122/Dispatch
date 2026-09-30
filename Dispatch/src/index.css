@@ -264,7 +264,9 @@ html[data-theme="light"] :is(
   [class~="bg-[#202020]"],
   [class~="bg-[#222222]"],
   [class~="bg-[#222]"],
+  [class~="bg-[#232323]"],
   [class~="bg-[#1d1d1d]"],
+  [class~="bg-[#1c1c1c]"],
   [class~="bg-[#212121]"],
   [class~="bg-[#141414]"]
 ) {
@@ -288,17 +290,20 @@ html[data-theme="light"] :is(
 
 html[data-theme="light"] :is(
   [class~="bg-[#333]"],
-  [class~="bg-[#333333]"]
+  [class~="bg-[#333333]"],
+  [class~="bg-[#363636]"]
 ) {
   background-color: var(--dispatch-surface-active);
 }
 
 html[data-theme="light"] :is(
   [class~="border-[#2a2a2a]"],
+  [class~="border-[#2c2c2c]"],
   [class~="border-[#2e2e2e]"],
   [class~="border-[#303030]"],
   [class~="border-[#333333]"],
   [class~="border-[#343434]"],
+  [class~="border-[#353535]"],
   [class~="border-[#363636]"],
   [class~="border-[#373737]"],
   [class~="border-[#383838]"],
@@ -380,6 +385,7 @@ html[data-theme="light"] :is(
   [class~="hover:bg-[#202020]"],
   [class~="hover:bg-[#242424]"],
   [class~="hover:bg-[#252525]"],
+  [class~="hover:bg-[#272727]"],
   [class~="hover:bg-[#282828]"],
   [class~="hover:bg-[#292929]"],
   [class~="hover:bg-[#2a2a2a]"],
@@ -387,6 +393,9 @@ html[data-theme="light"] :is(
   [class~="hover:bg-[#303030]"],
   [class~="hover:bg-[#333]"],
   [class~="hover:bg-[#333333]"],
+  [class~="hover:bg-[#363636]"],
+  [class~="hover:bg-[#3d3d3d]"],
+  [class~="hover:bg-[#2b2b2b]"],
   [class~="hover:bg-[#383838]"],
   [class~="hover:bg-zinc-800"]
 ):hover {
@@ -413,6 +422,7 @@ html[data-theme="light"] :is(
 
 html[data-theme="light"] :is(
   [class~="hover:bg-[#ff7a47]"],
+  [class~="hover:bg-[#ff7b4d]"],
   [class~="hover:bg-[#4076e6]"]
 ):hover {
   background-color: var(--dispatch-blue-hover);

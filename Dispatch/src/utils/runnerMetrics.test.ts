@@ -47,6 +47,7 @@ describe("runnerSummary", () => {
       errorRequests: 1,
       passedTests: 1,
       failedTests: 1,
+      responseSampleCount: 3,
       averageResponseTimeMs: 23,
       requestsPerSecond: 2,
       p50ResponseTimeMs: 20,
@@ -54,4 +55,3 @@ describe("runnerSummary", () => {
     });
   });
 });
-

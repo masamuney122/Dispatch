@@ -77,12 +77,27 @@ function networkEntries(request: ApiRequest, response: ApiResponse | null) {
       ["port", url.port || (url.protocol === "https:" ? "443" : "80")],
       ["path", `${url.pathname}${url.search}`],
       ["HTTP version", response?.network?.http_version || "Browser managed / unavailable"],
-      ["remote address", response?.network?.remote_address || "Unavailable"],
-      ["TLS", url.protocol === "https:" ? "Enabled" : "Not used"],
     ] satisfies Array<[string, string]>;
   } catch {
     return [["URL", request.url]] satisfies Array<[string, string]>;
   }
+}
+
+function remoteAddressEntries(remoteAddress?: string | null): Array<[string, string]> {
+  if (!remoteAddress) return [];
+  const ipv6 = remoteAddress.match(/^\[(.+)]:(\d+)$/);
+  if (ipv6) {
+    return [["address", ipv6[1]], ["family", "IPv6"], ["port", ipv6[2]]];
+  }
+  const separator = remoteAddress.lastIndexOf(":");
+  if (separator > 0) {
+    return [
+      ["address", remoteAddress.slice(0, separator)],
+      ["family", "IPv4"],
+      ["port", remoteAddress.slice(separator + 1)],
+    ];
+  }
+  return [["address", remoteAddress]];
 }
 
 function requestBody(request: ApiRequest): string | null {
@@ -106,6 +121,7 @@ const NetworkDetails: React.FC<{ event: NetworkConsoleEvent }> = ({ event }) => 
   const { request, response, requestStages, capabilities } = event.payload;
   const requestHeaders = Object.entries(request.headers).sort(([left], [right]) => left.localeCompare(right));
   const responseHeaders = Object.entries(response?.headers || {}).sort(([left], [right]) => left.localeCompare(right));
+  const remoteAddress = remoteAddressEntries(response?.network?.remote_address);
   const body = requestBody(request);
   const responseBody = response?.body
     ? prettyJson(response.body).value
@@ -127,7 +143,22 @@ const NetworkDetails: React.FC<{ event: NetworkConsoleEvent }> = ({ event }) => 
     <div className="relative border-b border-[#303030] bg-[#202020] px-9 py-1.5 font-mono text-[11px] leading-4">
       <button type="button" onClick={() => setRaw(true)} className="absolute right-7 top-2 text-[11px] text-sky-400 hover:text-sky-300">Show raw log</button>
       <DetailSection title="Network"><PropertyRows entries={networkEntries(request, response)} emptyText="No network metadata." /></DetailSection>
-      <DetailSection title="Request Headers"><PropertyRows entries={requestHeaders} emptyText="No request headers." /></DetailSection>
+      <DetailSection title="Addresses">
+        <div className="pl-5">
+          <p className="py-px text-zinc-500">local: <span className="text-zinc-600">Unavailable from the current transport</span></p>
+          <details open className="group/address">
+            <summary className="cursor-pointer list-none py-px text-zinc-500 marker:hidden">
+              <span className="mr-2 inline-block text-[8px] transition-transform group-open/address:rotate-90">▶</span>
+              remote
+            </summary>
+            <PropertyRows entries={remoteAddress} emptyText="Remote address unavailable." />
+          </details>
+        </div>
+      </DetailSection>
+      <DetailSection title="TLS">
+        <p className="pl-5 text-zinc-500">{request.url.toLowerCase().startsWith("https:") ? "Enabled; cipher and certificate metadata are unavailable." : "null"}</p>
+      </DetailSection>
+      <DetailSection title="Request Headers"><PropertyRows entries={requestHeaders} emptyText="No request headers were exposed by this transport." /></DetailSection>
       {body && <DetailSection title="Request Body"><pre className="my-0.5 ml-5 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded bg-[#272727] px-3 py-1.5 text-zinc-300">{body}</pre></DetailSection>}
       {requestChanged && (
         <DetailSection title="Request mutations" open={false}>
@@ -167,7 +198,7 @@ const NetworkEventRow: React.FC<{ event: NetworkConsoleEvent; showTimestamp: boo
   const { request, response } = event.payload;
   return (
     <>
-      <button type="button" onClick={() => setExpanded((current) => !current)} className={`grid min-h-8 w-full items-center border-b border-[#303030] px-9 py-1.5 text-left font-mono text-xs leading-5 hover:bg-[#262626] ${showTimestamp ? "grid-cols-[70px_minmax(0,1fr)]" : "grid-cols-[minmax(0,1fr)]"}`}>
+      <button type="button" onClick={() => setExpanded((current) => !current)} className={`grid min-h-8 w-full items-center border-b border-[#303030] px-9 py-1.5 text-left font-mono text-xs leading-5 hover:bg-[#282828] ${expanded ? "bg-[#272727]" : "bg-transparent"} ${showTimestamp ? "grid-cols-[70px_minmax(0,1fr)]" : "grid-cols-[minmax(0,1fr)]"}`}>
         {showTimestamp && <span className="text-[10px] text-zinc-600">{timeLabel(event.timestamp)}</span>}
         <span className="flex min-w-0 items-center gap-2">
           <span className={`shrink-0 text-[8px] text-zinc-500 transition-transform ${expanded ? "rotate-90" : ""}`}>▶</span>

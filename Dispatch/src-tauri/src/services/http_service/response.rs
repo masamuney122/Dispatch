@@ -18,16 +18,22 @@ pub(super) async fn into_api_response(
         http_version: Some(format!("{:?}", response.version())),
         remote_address: response.remote_addr().map(|address| address.to_string()),
     };
-    let headers = response
-        .headers()
-        .iter()
-        .map(|(name, value)| {
-            (
-                name.to_string(),
-                value.to_str().unwrap_or("<binary>").to_string(),
-            )
-        })
-        .collect::<HashMap<_, _>>();
+    let mut headers = HashMap::<String, String>::new();
+    for (name, value) in response.headers() {
+        let name = name.to_string();
+        let value = value.to_str().unwrap_or("<binary>");
+        headers
+            .entry(name.clone())
+            .and_modify(|existing| {
+                existing.push_str(if name.eq_ignore_ascii_case("set-cookie") {
+                    "\n"
+                } else {
+                    ", "
+                });
+                existing.push_str(value);
+            })
+            .or_insert_with(|| value.to_string());
+    }
     let content_type = headers
         .iter()
         .find(|(name, _)| name.eq_ignore_ascii_case(CONTENT_TYPE.as_str()))

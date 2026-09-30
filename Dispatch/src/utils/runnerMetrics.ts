@@ -44,6 +44,7 @@ export function runnerSummary(
     skippedRequests: results.filter((result) => result.status === "skipped").length,
     passedTests: tests.filter((test) => test.passed).length,
     failedTests: tests.filter((test) => !test.passed).length,
+    responseSampleCount: responseTimes.length,
     averageResponseTimeMs:
       responseTimes.length > 0
         ? Math.round(totalResponseTime / responseTimes.length)
@@ -59,4 +60,3 @@ export function runnerSummary(
     maxResponseTimeMs: responseTimes.at(-1) || 0,
   };
 }
-

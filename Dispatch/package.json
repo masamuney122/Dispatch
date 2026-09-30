@@ -17,7 +17,7 @@
     "wasm:build": "wasm-pack build rust/dispatch-web-wasm --target web --out-dir ../../src/platform/web/wasm --out-name dispatch_web_wasm",
     "test:rust": "cargo test --workspace --locked && cargo test --manifest-path src-tauri/Cargo.toml --locked",
     "test:scripts": "vitest run src/workers/scriptRunner.worker.test.ts",
-    "test:runner": "vitest run src/services/collectionRunnerService.test.ts src/services/console/consoleRecorder.test.ts src/utils/collectionRunOrder.test.ts src/utils/iterationData.test.ts src/utils/runnerMetrics.test.ts src/workers/scriptRunner.worker.test.ts",
+    "test:runner": "vitest run src/services/collectionRunnerService.test.ts src/services/console/consoleRecorder.test.ts src/utils/collectionRunOrder.test.ts src/utils/iterationData.test.ts src/utils/performanceRunner.test.ts src/utils/runnerMetrics.test.ts src/workers/scriptRunner.worker.test.ts",
     "test:openapi": "cargo test -p dispatch-core --locked openapi_ && vitest run src/platform/web/services/openApiService.test.ts",
     "test:collections": "cargo test -p dispatch-core --locked collection_mutation && vitest run src/platform/web/services/collectionService.test.ts",
     "test:environments": "cargo test -p dispatch-core --locked environment_mutation && vitest run src/platform/web/services/environmentService.test.ts",

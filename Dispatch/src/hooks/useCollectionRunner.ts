@@ -14,6 +14,7 @@ import {
 } from "../types/runner";
 import { collectionRequestsInRunOrder } from "../utils/collectionRunOrder";
 import { runnerSummary } from "../utils/runnerMetrics";
+import { evaluatePerformanceCriterion } from "../utils/performanceRunner";
 import type { ConsoleEvent } from "../types/console";
 
 interface CollectionRunnerOptions {
@@ -51,7 +52,14 @@ function defaultConfiguration(
     saveCookiesAfterRun: true,
     performanceDurationSeconds: 30,
     virtualUsers: 1,
+    initialLoad: 1,
     loadProfile: "fixed",
+    performanceCriterion: {
+      enabled: false,
+      metric: "p95",
+      condition: "less-than",
+      value: 500,
+    },
   };
 }
 
@@ -77,6 +85,7 @@ export function useCollectionRunner({
         configuration: defaultConfiguration(collection, activeEnvironmentId, scope),
         results: [],
         summary: { ...EMPTY_RUNNER_SUMMARY },
+        performanceEvaluation: null,
         stopRequested: false,
       };
       setRunners((current) => [...current, runner]);
@@ -111,6 +120,7 @@ export function useCollectionRunner({
               status: "draft",
               results: [],
               summary: { ...EMPTY_RUNNER_SUMMARY },
+              performanceEvaluation: null,
               stopRequested: false,
             }
           : runner,
@@ -155,6 +165,7 @@ export function useCollectionRunner({
                 results: [],
                 stopRequested: false,
                 summary: { ...EMPTY_RUNNER_SUMMARY, startedAt },
+                performanceEvaluation: null,
               }
             : item,
         ),
@@ -214,6 +225,14 @@ export function useCollectionRunner({
           );
         }
         const finishedAt = new Date().toISOString();
+        const summary = runnerSummary(runResults, startedAt, finishedAt);
+        const performanceEvaluation = runner.configuration.runType === "performance"
+          ? evaluatePerformanceCriterion(
+              summary,
+              runner.configuration.performanceCriterion,
+              !output.stopped,
+            )
+          : null;
         setRunners((current) =>
           current.map((item) =>
             item.id === id
@@ -222,7 +241,8 @@ export function useCollectionRunner({
                   status: output.stopped ? "stopped" : "completed",
                   stopRequested: output.stopped,
                   results: [...runResults],
-                  summary: runnerSummary(runResults, startedAt, finishedAt),
+                  summary,
+                  performanceEvaluation,
                 }
               : item,
           ),
@@ -244,6 +264,14 @@ export function useCollectionRunner({
           scriptReports: [],
         };
         runResults.push(failedResult);
+        const summary = runnerSummary(runResults, startedAt, finishedAt);
+        const performanceEvaluation = runner.configuration.runType === "performance"
+          ? evaluatePerformanceCriterion(
+              summary,
+              runner.configuration.performanceCriterion,
+              false,
+            )
+          : null;
         setRunners((current) =>
           current.map((item) =>
             item.id === id
@@ -251,7 +279,8 @@ export function useCollectionRunner({
                   ...item,
                   status: "stopped",
                   results: [...runResults],
-                  summary: runnerSummary(runResults, startedAt, finishedAt),
+                  summary,
+                  performanceEvaluation,
                 }
               : item,
           ),

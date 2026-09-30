@@ -4,6 +4,7 @@ import type {
   RunnerConfiguration,
   RunnerRequestResult,
 } from "../types/runner";
+import { virtualUserStartDelayMs } from "../utils/performanceRunner";
 import type { ScriptExecutionReport } from "../types/script";
 import {
   executeRequestCycle,
@@ -286,17 +287,16 @@ export async function runPerformanceCollection({
   const runVirtualUser = async (virtualUser: number) => {
     let runtimeEnvironment = { ...(environment?.variables || {}) };
     let iteration = 0;
-    const transport = await createTransport(configuration.useStoredCookies);
-    if (configuration.loadProfile === "ramp-up" && userCount > 1) {
-      const rampDelay =
-        (configuration.performanceDurationSeconds * 500 * (virtualUser - 1)) /
-        (userCount - 1);
+    const startDelay = virtualUserStartDelayMs(configuration, virtualUser);
+    if (startDelay > 0) {
       await wait(
-        rampDelay,
+        startDelay,
         () => isStopRequested() || fatalError || performance.now() >= deadline,
       );
     }
+    if (isStopRequested() || fatalError || performance.now() >= deadline) return;
 
+    const transport = await createTransport(configuration.useStoredCookies);
     try {
       while (performance.now() < deadline && !isStopRequested() && !fatalError) {
         for (const item of requests) {

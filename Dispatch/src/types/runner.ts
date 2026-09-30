@@ -7,6 +7,28 @@ export type RunnerRunType = "functional" | "performance";
 export type RunnerLoadProfile = "fixed" | "ramp-up";
 export type RunnerStatus = "draft" | "running" | "completed" | "stopped";
 export type RunnerResultStatus = "passed" | "failed" | "error" | "skipped";
+export type PerformanceMetric = "average" | "p50" | "p95" | "p99" | "max";
+export type PerformanceCondition =
+  | "less-than"
+  | "less-than-or-equal"
+  | "greater-than"
+  | "greater-than-or-equal";
+
+export interface PerformanceCriterion {
+  enabled: boolean;
+  metric: PerformanceMetric;
+  condition: PerformanceCondition;
+  value: number;
+}
+
+export interface PerformanceCriterionEvaluation {
+  status: "passed" | "failed" | "not-evaluated";
+  metric: PerformanceMetric;
+  condition: PerformanceCondition;
+  target: number;
+  actual: number | null;
+  reason?: string;
+}
 
 export type RunnerScope =
   | { type: "collection" }
@@ -33,7 +55,9 @@ export interface RunnerConfiguration {
   saveCookiesAfterRun: boolean;
   performanceDurationSeconds: number;
   virtualUsers: number;
+  initialLoad: number;
   loadProfile: RunnerLoadProfile;
+  performanceCriterion: PerformanceCriterion;
 }
 
 export interface RunnerRequestResult {
@@ -66,6 +90,7 @@ export interface RunnerSummary {
   passedTests: number;
   failedTests: number;
   averageResponseTimeMs: number;
+  responseSampleCount: number;
   requestsPerSecond: number;
   minResponseTimeMs: number;
   p50ResponseTimeMs: number;
@@ -84,6 +109,7 @@ export interface CollectionRunnerState {
   configuration: RunnerConfiguration;
   results: RunnerRequestResult[];
   summary: RunnerSummary;
+  performanceEvaluation: PerformanceCriterionEvaluation | null;
   stopRequested: boolean;
 }
 
@@ -104,6 +130,7 @@ export const EMPTY_RUNNER_SUMMARY: RunnerSummary = {
   passedTests: 0,
   failedTests: 0,
   averageResponseTimeMs: 0,
+  responseSampleCount: 0,
   requestsPerSecond: 0,
   minResponseTimeMs: 0,
   p50ResponseTimeMs: 0,

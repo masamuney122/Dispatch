@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use base64::Engine;
 use dispatch_core::{ApiRequest, GlobalHttpSettings, HttpVersionPreference, PreparedBody};
+use reqwest::header::{ACCEPT, ACCEPT_ENCODING, USER_AGENT};
 
 use crate::services::cookie_service::ManagedCookieJar;
 
@@ -51,10 +52,26 @@ pub(super) fn build_request(
     let method =
         reqwest::Method::from_bytes(method.as_bytes()).map_err(|error| error.to_string())?;
     let mut builder = client.request(method, &request.url);
+    if !has_header(request, ACCEPT.as_str()) {
+        builder = builder.header(ACCEPT, "*/*");
+    }
+    if !has_header(request, ACCEPT_ENCODING.as_str()) {
+        builder = builder.header(ACCEPT_ENCODING, "gzip, deflate, br, zstd");
+    }
+    if !has_header(request, USER_AGENT.as_str()) {
+        builder = builder.header(USER_AGENT, concat!("Dispatch/", env!("CARGO_PKG_VERSION")));
+    }
     for (key, value) in &request.headers {
         builder = builder.header(key, value);
     }
     apply_body(builder, body)
+}
+
+fn has_header(request: &ApiRequest, expected: &str) -> bool {
+    request
+        .headers
+        .keys()
+        .any(|name| name.eq_ignore_ascii_case(expected))
 }
 
 fn apply_body(

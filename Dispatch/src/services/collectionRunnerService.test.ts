@@ -55,7 +55,14 @@ const configuration = (
   saveCookiesAfterRun: true,
   performanceDurationSeconds: 1,
   virtualUsers: 1,
+  initialLoad: 1,
   loadProfile: "fixed",
+  performanceCriterion: {
+    enabled: false,
+    metric: "p95",
+    condition: "less-than",
+    value: 500,
+  },
   ...overrides,
 });
 

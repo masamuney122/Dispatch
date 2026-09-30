@@ -5,6 +5,10 @@ import { formatSize } from "../../utils/responseUtils";
 import { OverlayScrollArea } from "../common/OverlayScrollArea";
 import type { ConsoleEvent } from "../../types/console";
 import { RequestConsole } from "../layout/RequestConsole";
+import {
+  performanceConditionSymbol,
+  performanceMetricLabel,
+} from "../../utils/performanceRunner";
 
 interface RunnerResultsProps {
   runner: CollectionRunnerState;
@@ -33,6 +37,7 @@ export const RunnerResults: React.FC<RunnerResultsProps> = ({
   const [filter, setFilter] = useState<ResultFilter>("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const { summary } = runner;
+  const criterionEvaluation = runner.performanceEvaluation;
   const visibleResults = useMemo(
     () => filter === "all" || filter === "console"
       ? runner.results
@@ -59,12 +64,30 @@ export const RunnerResults: React.FC<RunnerResultsProps> = ({
     <div className="flex h-full min-h-0 flex-col bg-[#202020] text-zinc-300">
       <div className="flex shrink-0 items-center justify-between border-b border-[#343434] px-6 py-3">
         <div>
-          <h1 className="text-sm font-semibold text-zinc-100">
-            {runner.collectionName}{runner.scope.type === "folder" ? ` › ${runner.scope.folderName}` : ""} - Run results
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-sm font-semibold text-zinc-100">
+              {runner.collectionName}{runner.scope.type === "folder" ? ` › ${runner.scope.folderName}` : ""} - Run results
+            </h1>
+            {criterionEvaluation && (
+              <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                criterionEvaluation.status === "passed"
+                  ? "bg-emerald-500/15 text-emerald-300"
+                  : criterionEvaluation.status === "failed"
+                    ? "bg-red-500/15 text-red-300"
+                    : "bg-zinc-500/15 text-zinc-400"
+              }`}>
+                {criterionEvaluation.status === "passed" ? "Pass" : criterionEvaluation.status === "failed" ? "Fail" : "Not evaluated"}
+              </span>
+            )}
+          </div>
           <p className="mt-1 text-[11px] text-zinc-500">
             {runner.status === "running" ? "Run in progress" : runner.status === "stopped" ? "Run stopped" : `Ran ${summary.finishedAt ? new Date(summary.finishedAt).toLocaleString() : ""}`}
           </p>
+          {runner.configuration.runType === "performance" && (
+            <p className="mt-0.5 text-[10px] text-zinc-600">
+              {runner.configuration.virtualUsers} VUs · {runner.configuration.performanceDurationSeconds}s · {runner.configuration.loadProfile === "ramp-up" ? `Ramp-up from ${runner.configuration.initialLoad} VUs` : "Fixed load"}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {runner.status === "running" ? (
@@ -102,6 +125,41 @@ export const RunnerResults: React.FC<RunnerResultsProps> = ({
           <span>P95 <strong className="text-zinc-300">{summary.p95ResponseTimeMs} ms</strong></span>
           <span>P99 <strong className="text-zinc-300">{summary.p99ResponseTimeMs} ms</strong></span>
           <span>Max <strong className="text-zinc-300">{summary.maxResponseTimeMs} ms</strong></span>
+        </div>
+      )}
+
+      {criterionEvaluation && (
+        <div className={`flex shrink-0 items-center justify-between gap-6 border-b px-6 py-3 text-xs ${
+          criterionEvaluation.status === "passed"
+            ? "border-emerald-900/40 bg-emerald-500/5"
+            : criterionEvaluation.status === "failed"
+              ? "border-red-900/40 bg-red-500/5"
+              : "border-[#343434] bg-[#222222]"
+        }`}>
+          <div className="flex items-center gap-2.5">
+            <span className={`text-base font-bold ${
+              criterionEvaluation.status === "passed"
+                ? "text-emerald-400"
+                : criterionEvaluation.status === "failed"
+                  ? "text-red-400"
+                  : "text-zinc-500"
+            }`}>
+              {criterionEvaluation.status === "passed" ? "✓" : criterionEvaluation.status === "failed" ? "×" : "–"}
+            </span>
+            <div>
+              <p className="font-semibold text-zinc-300">Performance criterion</p>
+              <p className="mt-0.5 text-[10px] text-zinc-500">
+                {performanceMetricLabel(criterionEvaluation.metric)} {performanceConditionSymbol(criterionEvaluation.condition)} {criterionEvaluation.target} ms
+              </p>
+            </div>
+          </div>
+          <div className="text-right">
+            {criterionEvaluation.actual == null ? (
+              <p className="text-[10px] text-zinc-500">{criterionEvaluation.reason}</p>
+            ) : (
+              <><p className="font-mono font-semibold text-zinc-300">{criterionEvaluation.actual} ms</p><p className="text-[10px] text-zinc-600">Actual value</p></>
+            )}
+          </div>
         </div>
       )}
 
