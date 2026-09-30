@@ -17,7 +17,6 @@ export interface RecentWorkspaceRecord {
   handle: FileSystemDirectoryHandle;
 }
 
-export type ArchiveMode = "backup" | "safe_share";
 import type {
   CollectionsDocument,
   EnvironmentsDocument,

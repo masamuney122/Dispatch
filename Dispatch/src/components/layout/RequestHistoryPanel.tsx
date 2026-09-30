@@ -1,6 +1,5 @@
 import { useState } from "react";
 
-import { deleteHistoryItem } from "../../services/historyService";
 import type { HistoryItem } from "../../types/history";
 import { MethodBadge } from "../common/MethodBadge";
 import { RequestContextMenu } from "./RequestContextMenu";
@@ -11,6 +10,7 @@ interface RequestHistoryPanelProps {
   selectedHistoryId: string | null;
   onSelectHistory: (item: HistoryItem) => void;
   onClearHistory: () => void;
+  onDeleteHistory: (id: string) => Promise<void>;
 }
 
 function groupHistory(items: HistoryItem[]): Record<string, HistoryItem[]> {
@@ -37,6 +37,7 @@ export function RequestHistoryPanel({
   selectedHistoryId,
   onSelectHistory,
   onClearHistory,
+  onDeleteHistory,
 }: RequestHistoryPanelProps) {
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [contextMenu, setContextMenu] = useState<{
@@ -54,9 +55,8 @@ export function RequestHistoryPanel({
 
   const deleteItem = async (id: string) => {
     try {
-      await deleteHistoryItem(id);
+      await onDeleteHistory(id);
       setContextMenu(null);
-      window.dispatchEvent(new Event("history-updated"));
     } catch (error) {
       console.error("Failed to delete history item:", error);
     }

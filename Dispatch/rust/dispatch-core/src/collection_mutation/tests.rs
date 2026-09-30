@@ -51,6 +51,25 @@ fn collection() -> Collection {
     }
 }
 
+fn target_collection() -> Collection {
+    Collection {
+        id: "c2".into(),
+        name: "Target".into(),
+        created_at: "old".into(),
+        updated_at: "old".into(),
+        folders: vec![Folder {
+            id: "target-parent".into(),
+            name: "Destination".into(),
+            collection_id: "c2".into(),
+            parent_folder_id: None,
+            order: 0,
+            created_at: "old".into(),
+            updated_at: "old".into(),
+        }],
+        requests: Vec::new(),
+    }
+}
+
 #[test]
 fn folders_and_requests_share_a_sibling_order() {
     let result = apply_collection_mutation(
@@ -171,4 +190,101 @@ fn reorder_rejects_cycles_created_by_a_batch() {
     )
     .unwrap_err();
     assert!(error.contains("descendant"));
+}
+
+#[test]
+fn moving_a_folder_transfers_the_complete_subtree_atomically() {
+    let mut source = collection();
+    source.folders.push(Folder {
+        id: "child".into(),
+        name: "Child".into(),
+        collection_id: "c1".into(),
+        parent_folder_id: Some("f1".into()),
+        order: 0,
+        created_at: "old".into(),
+        updated_at: "old".into(),
+    });
+    source.requests.push(SavedRequest {
+        id: "nested".into(),
+        name: "Nested".into(),
+        request: api_request(),
+        folder_id: Some("child".into()),
+        order: 0,
+        created_at: "old".into(),
+        updated_at: "old".into(),
+    });
+
+    let result = apply_collection_mutation(
+        &[source, target_collection()],
+        CollectionMutation::MoveFolder {
+            source_collection_id: "c1".into(),
+            folder_id: "f1".into(),
+            target_collection_id: "c2".into(),
+            target_parent_folder_id: Some("target-parent".into()),
+        },
+        &context(""),
+    )
+    .unwrap();
+
+    let source = &result.collections[0];
+    assert!(source.folders.is_empty());
+    assert_eq!(
+        source
+            .requests
+            .iter()
+            .map(|request| request.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["r1"]
+    );
+    assert_eq!(source.requests[0].order, 0);
+
+    let target = &result.collections[1];
+    let moved_root = target
+        .folders
+        .iter()
+        .find(|folder| folder.id == "f1")
+        .unwrap();
+    assert_eq!(moved_root.collection_id, "c2");
+    assert_eq!(
+        moved_root.parent_folder_id.as_deref(),
+        Some("target-parent")
+    );
+    let moved_child = target
+        .folders
+        .iter()
+        .find(|folder| folder.id == "child")
+        .unwrap();
+    assert_eq!(moved_child.collection_id, "c2");
+    assert_eq!(moved_child.parent_folder_id.as_deref(), Some("f1"));
+    assert_eq!(target.requests[0].folder_id.as_deref(), Some("child"));
+    assert_eq!(result.entity.unwrap()["id"], "f1");
+}
+
+#[test]
+fn moving_a_folder_rejects_invalid_destinations() {
+    let error = apply_collection_mutation(
+        &[collection(), target_collection()],
+        CollectionMutation::MoveFolder {
+            source_collection_id: "c1".into(),
+            folder_id: "f1".into(),
+            target_collection_id: "c2".into(),
+            target_parent_folder_id: Some("missing".into()),
+        },
+        &context(""),
+    )
+    .unwrap_err();
+    assert!(error.contains("Parent folder not found"));
+
+    let error = apply_collection_mutation(
+        &[collection()],
+        CollectionMutation::MoveFolder {
+            source_collection_id: "c1".into(),
+            folder_id: "f1".into(),
+            target_collection_id: "c1".into(),
+            target_parent_folder_id: None,
+        },
+        &context(""),
+    )
+    .unwrap_err();
+    assert!(error.contains("already belongs"));
 }

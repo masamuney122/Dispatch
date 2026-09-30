@@ -84,6 +84,9 @@ export interface CollectionTreeNodeProps {
   onRenameFolder: (collectionId: string, folderId: string, name: string) => Promise<void>;
   onDeleteFolder: (collectionId: string, folderId: string, hasChildren: boolean) => void;
   onDuplicateFolder: (collectionId: string, folderId: string) => Promise<void>;
+  onMoveFolderRequest: (collectionId: string, folderId: string, folderName: string) => void;
+  onRunFolder: (collectionId: string, folderId: string, folderName: string) => void;
+  canMoveFolder: boolean;
   onCreateRequest: (collectionId: string, folderId: string | null) => Promise<void>;
   onRenameRequest: (collectionId: string, requestId: string, name: string) => Promise<void>;
   onDuplicateRequest: (collectionId: string, requestId: string) => Promise<void>;
@@ -106,6 +109,9 @@ export const CollectionTreeNode: React.FC<CollectionTreeNodeProps> = ({
   onRenameFolder,
   onDeleteFolder,
   onDuplicateFolder,
+  onMoveFolderRequest,
+  onRunFolder,
+  canMoveFolder,
   onCreateRequest,
   onRenameRequest,
   onDuplicateRequest,
@@ -419,6 +425,9 @@ export const CollectionTreeNode: React.FC<CollectionTreeNodeProps> = ({
           }}
           onRename={startRename}
           onDuplicate={() => void onDuplicateFolder(collectionId, folder.id)}
+          onMove={canMoveFolder ? () => onMoveFolderRequest(collectionId, folder.id, folder.name) : undefined}
+          onRun={() => onRunFolder(collectionId, folder.id, folder.name)}
+          runLabel="Run folder"
           onDelete={() => onDeleteFolder(collectionId, folder.id, hasChildren)}
         />
       )}
@@ -480,6 +489,9 @@ export const CollectionTreeNode: React.FC<CollectionTreeNodeProps> = ({
               onRenameFolder={onRenameFolder}
               onDeleteFolder={onDeleteFolder}
               onDuplicateFolder={onDuplicateFolder}
+              onMoveFolderRequest={onMoveFolderRequest}
+              onRunFolder={onRunFolder}
+              canMoveFolder={canMoveFolder}
               onCreateRequest={onCreateRequest}
               onRenameRequest={onRenameRequest}
               onDuplicateRequest={onDuplicateRequest}

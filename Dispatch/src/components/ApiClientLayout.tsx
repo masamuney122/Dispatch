@@ -1,27 +1,24 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { TopNavbar } from "./layout/TopNavbar";
 import { ExplorerSidebar } from "./layout/ExplorerSidebar";
 import { RequestTabsBar } from "./layout/RequestTabsBar";
-import { UrlActionBar } from "./layout/UrlActionBar";
-import { RequestSectionTabs } from "./layout/RequestSectionTabs";
-import { QueryParamsTable } from "./layout/QueryParamsTable";
-import { HeadersEditor } from "./layout/HeadersEditor";
-import { BodyEditor } from "./layout/BodyEditor";
-import { AuthEditor } from "./layout/AuthEditor";
-import { ResponsePlaceholder } from "./layout/ResponsePlaceholder";
+import { RequestWorkspacePanel } from "./layout/RequestWorkspacePanel";
 import { SaveRequestDialog } from "./layout/SaveRequestDialog";
 import { OpenApiImportDialog } from "./openapi/OpenApiImportDialog";
 import { OpenApiExportDialog } from "./openapi/OpenApiExportDialog";
 import { EnvironmentEditor } from "./environment/EnvironmentEditor";
 import { OverlayScrollArea } from "./common/OverlayScrollArea";
-import { RequestHttpSettingsEditor } from "./settings/HttpSettingsEditor";
 import { GlobalSettingsDialog } from "./settings/GlobalSettingsDialog";
 import { CookieManagerDialog } from "./cookies/CookieManagerDialog";
-import { ScriptsEditor } from "./scripts/ScriptsEditor";
+import { CollectionRunnerPanel } from "./runner/CollectionRunnerPanel";
 
 import { useRequestTabs } from "../hooks/useRequestTabs";
 import { useAppData } from "../hooks/useAppData";
 import { useRequestExecution } from "../hooks/useRequestExecution";
+import { useGlobalHttpSettings } from "../hooks/useGlobalHttpSettings";
+import { useOpenApiWorkflow } from "../hooks/useOpenApiWorkflow";
+import { useCollectionRunner } from "../hooks/useCollectionRunner";
+import { useConsoleStore } from "../hooks/useConsoleStore";
 import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
@@ -30,21 +27,18 @@ import {
 
 import { saveRequestToCollection, createCollection, updateRequestInCollection } from "../services/collectionService";
 
+import type { SavedRequest } from "../types/collection";
 import type { HistoryItem } from "../types/history";
-import type { QueryParamItem } from "../types/tab";
-import type { Collection, SavedRequest } from "../types/collection";
 import type { ArchiveMode } from "../types/workspace";
-import type { OpenApiExportOptions, OpenApiImportOptions, OpenApiSource } from "../types/openapi";
 import { exportWorkspaceArchive } from "../services/workspaceService";
 import { flushWorkspaceChanges } from "../services/workspaceLifecycle";
-import { exportCollectionOpenApi, importOpenApi, inspectOpenApi } from "../services/openApiService";
-import { loadGlobalHttpSettings, saveGlobalHttpSettings } from "../services/httpSettingsService";
 import { platformCapabilities } from "../services/platformService";
-import { DEFAULT_HTTP_SETTINGS, type GlobalHttpSettings, type RequestHttpSettings } from "../types/httpSettings";
-import { EMPTY_REQUEST_SCRIPTS } from "../types/script";
 import {
   createRequestPayload,
+  historyTabUpdates,
+  requestBreadcrumb,
   requestDisplayName,
+  savedRequestTabUpdates,
 } from "../utils/requestDraft";
 
 interface ApiClientLayoutProps {
@@ -62,12 +56,15 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
     tabsInfoList,
     activeTabId,
     activeEnvironmentId: activeEnvironmentTabId,
+    activeRunnerId,
+    activeWorkspaceTab,
     setActiveTabId,
     updateActiveTab,
     clearHttpSettingOverrides,
     handleAddTab,
     handleCloseTab,
     openEnvironmentTab,
+    openRunnerTab,
     closeEnvironmentTab,
     activateRequestTab,
     handleReorderTab,
@@ -83,6 +80,7 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
     activeEnvironmentId,
     environmentError,
     handleClearHistory: clearHistoryData,
+    handleDeleteHistoryItem,
     handleCreateCollection,
     handleRenameCollection,
     handleDeleteCollection,
@@ -91,6 +89,7 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
     handleRenameFolder,
     handleDeleteFolder,
     handleDuplicateFolder,
+    handleMoveFolder,
     handleCreateRequest,
     handleRenameRequest,
     handleDuplicateRequest,
@@ -104,25 +103,30 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
     handleSelectEnvironment,
   } = useAppData();
 
+  const consoleStore = useConsoleStore();
+  const collectionRunner = useCollectionRunner({
+    environments,
+    activeEnvironmentId,
+    commitEnvironment: handleCommitEnvironment,
+    appendConsoleEvents: consoleStore.append,
+  });
+
   // ── Local UI State ──
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarMode, setSidebarMode] = useState<"collections" | "history">("collections");
-  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
-  const [openApiImportDialogOpen, setOpenApiImportDialogOpen] = useState(false);
-  const [openApiExportCollection, setOpenApiExportCollection] = useState<Collection | null>(null);
-  const [openApiSubmitting, setOpenApiSubmitting] = useState(false);
-  const [openApiError, setOpenApiError] = useState<string | null>(null);
-  const [globalHttpSettings, setGlobalHttpSettings] = useState<GlobalHttpSettings>(DEFAULT_HTTP_SETTINGS);
-  const [globalSettingsOpen, setGlobalSettingsOpen] = useState(false);
+  const [saveDialogMode, setSaveDialogMode] = useState<"save" | "saveAs" | null>(null);
   const [cookieManagerOpen, setCookieManagerOpen] = useState(false);
-  const [globalSettingsSaving, setGlobalSettingsSaving] = useState(false);
-  const [globalSettingsError, setGlobalSettingsError] = useState<string | null>(null);
 
-  useEffect(() => {
-    void loadGlobalHttpSettings()
-      .then(setGlobalHttpSettings)
-      .catch((error) => console.error("Global HTTP settings could not be loaded", error));
-  }, []);
+  const globalHttp = useGlobalHttpSettings({
+    collections,
+    clearTabOverrides: clearHttpSettingOverrides,
+    refreshCollections,
+  });
+  const openApi = useOpenApiWorkflow({
+    refreshCollections,
+    refreshEnvironments,
+    showCollections: () => setSidebarMode("collections"),
+  });
 
   // ── Event Handlers ──
 
@@ -133,96 +137,22 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
     updateActiveTab,
     commitEnvironment: handleCommitEnvironment,
     setHistory,
+    appendConsoleEvents: consoleStore.append,
   });
 
   const handleSelectHistory = (item: HistoryItem) => {
-    let parsedParams: QueryParamItem[] = [];
-    try {
-      if (item.url.includes("?")) {
-        const [, search] = item.url.split("?");
-        const p = new URLSearchParams(search);
-        p.forEach((val, key) => {
-          parsedParams.push({ key, value: val });
-        });
-      }
-    } catch {
-      parsedParams = [];
-    }
-
-    updateActiveTab({
-      method: item.method as import("../types/request").HttpMethod,
-      url: item.url,
-      body: item.body || "",
-      queryParams: parsedParams,
-      auth: item.auth || { type: "None" },
-      settings: {},
-      scripts: { ...EMPTY_REQUEST_SCRIPTS },
-      scriptReports: [],
-      selectedHistoryId: item.id,
-      selectedSavedRequestId: null,
-      isDirty: false,
-    });
+    updateActiveTab(historyTabUpdates(item));
     activateRequestTab();
   };
 
   const handleSelectSavedRequest = (item: SavedRequest) => {
-    updateActiveTab({
-      title: item.name,
-      method: item.request.method,
-      url: item.request.url,
-      body: item.request.body,
-      bodyType: item.request.body_type,
-      formFields: item.request.form_fields,
-      binary: item.request.binary,
-      queryParams: [],
-      headers: Object.entries(item.request.headers).map(([key, value]) => ({ key, value })),
-      auth: item.request.auth || { type: "None" },
-      settings: item.request.settings || {},
-      scripts: { ...EMPTY_REQUEST_SCRIPTS, ...(item.request.scripts || {}) },
-      scriptReports: [],
-      response: null,
-      error: null,
-      selectedHistoryId: null,
-      selectedSavedRequestId: item.id,
-      isDirty: false,
-    });
+    updateActiveTab(savedRequestTabUpdates(item));
     activateRequestTab();
   };
 
   const handleClearHistory = async () => {
     await clearHistoryData();
     updateActiveTab({ selectedHistoryId: null });
-  };
-
-  const handleSaveGlobalSettings = async (settings: GlobalHttpSettings) => {
-    setGlobalSettingsSaving(true);
-    setGlobalSettingsError(null);
-    try {
-      const changedKeys = (Object.keys(settings) as Array<keyof GlobalHttpSettings>)
-        .filter((key) => settings[key] !== globalHttpSettings[key]) as Array<keyof RequestHttpSettings>;
-      const saved = await saveGlobalHttpSettings(settings);
-      setGlobalHttpSettings(saved);
-      clearHttpSettingOverrides(changedKeys);
-      for (const collection of collections) {
-        for (const savedRequest of collection.requests) {
-          if (!changedKeys.some((key) => savedRequest.request.settings?.[key] != null)) continue;
-          const requestSettings = { ...(savedRequest.request.settings || {}) };
-          changedKeys.forEach((key) => delete requestSettings[key]);
-          await updateRequestInCollection(collection.id, savedRequest.id, savedRequest.name, {
-            ...savedRequest.request,
-            settings: requestSettings,
-          });
-        }
-      }
-      if (changedKeys.length > 0) {
-        await refreshCollections();
-      }
-      setGlobalSettingsOpen(false);
-    } catch (error) {
-      setGlobalSettingsError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setGlobalSettingsSaving(false);
-    }
   };
 
   const handleDeleteCollectionWithCleanup = async (id: string) => {
@@ -244,6 +174,32 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
     closeEnvironmentTab(id);
   };
 
+  const handleOpenCollectionRunner = (collection: (typeof collections)[number]) => {
+    const runner = collectionRunner.openRunner(collection);
+    openRunnerTab(runner.id);
+  };
+
+  const handleOpenFolderRunner = (
+    collection: (typeof collections)[number],
+    folderId: string,
+    folderName: string,
+  ) => {
+    const runner = collectionRunner.openRunner(collection, {
+      type: "folder",
+      folderId,
+      folderName,
+    });
+    openRunnerTab(runner.id);
+  };
+
+  const handleCloseWorkspaceTab = (id: string) => {
+    const workspaceTab = tabsInfoList.find((tab) => tab.id === id);
+    if (workspaceTab?.kind === "runner") {
+      collectionRunner.closeRunner(workspaceTab.runnerId);
+    }
+    handleCloseTab(id);
+  };
+
   const handleSaveRequest = async () => {
     if (activeTab.selectedSavedRequestId) {
       const collectionId = getActiveCollection()?.id;
@@ -260,11 +216,18 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
           return;
         } catch (err) {
           console.error("Failed to update saved request", err);
+          window.alert(err instanceof Error ? err.message : "Request could not be saved.");
+          return;
         }
       }
+
+      window.alert("The collection containing this request could not be found.");
+      return;
     }
-    setSaveDialogOpen(true);
+    setSaveDialogMode("save");
   };
+
+  const handleSaveRequestAs = () => setSaveDialogMode("saveAs");
 
   const handleConfirmSave = async (collectionId: string, newCollectionName: string | null) => {
     let targetId = collectionId;
@@ -285,7 +248,7 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
       isDirty: false,
     });
     setSidebarMode("collections");
-    setSaveDialogOpen(false);
+    setSaveDialogMode(null);
   };
 
   const environmentEditorEnvironment = environments.find(
@@ -315,32 +278,10 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
     );
   };
 
-  const activeCollection = getActiveCollection();
-  const activeRequestBreadcrumb = (() => {
-    if (!activeCollection || !activeTab.selectedSavedRequestId) return [];
-
-    const savedRequest = activeCollection.requests.find(
-      (request) => request.id === activeTab.selectedSavedRequestId
-    );
-    if (!savedRequest) return [activeCollection.name];
-
-    const foldersById = new Map(
-      activeCollection.folders.map((folder) => [folder.id, folder])
-    );
-    const folderNames: string[] = [];
-    const visitedFolderIds = new Set<string>();
-    let folderId = savedRequest.folder_id ?? null;
-
-    while (folderId && !visitedFolderIds.has(folderId)) {
-      visitedFolderIds.add(folderId);
-      const folder = foldersById.get(folderId);
-      if (!folder) break;
-      folderNames.unshift(folder.name);
-      folderId = folder.parent_folder_id ?? null;
-    }
-
-    return [activeCollection.name, ...folderNames];
-  })();
+  const activeRequestBreadcrumb = requestBreadcrumb(
+    collections,
+    activeTab.selectedSavedRequestId,
+  );
 
   const handleExportWorkspace = async (mode: ArchiveMode) => {
     try {
@@ -348,64 +289,6 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
       await exportWorkspaceArchive(mode, workspaceName);
     } catch (error) {
       window.alert(error instanceof Error ? error.message : String(error));
-    }
-  };
-
-  const handleChooseOpenApi = async () => {
-    setOpenApiError(null);
-    setOpenApiImportDialogOpen(true);
-  };
-
-  const handleConfirmOpenApiImport = async (
-    source: OpenApiSource,
-    options: OpenApiImportOptions
-  ) => {
-    setOpenApiSubmitting(true);
-    setOpenApiError(null);
-    try {
-      await flushWorkspaceChanges();
-      const result = await importOpenApi(source, options);
-      await Promise.all([refreshCollections(), refreshEnvironments()]);
-      setSidebarMode("collections");
-      setOpenApiImportDialogOpen(false);
-      if (result.warnings.length > 0) {
-        window.alert(`OpenAPI içe aktarıldı. ${result.warnings.length} özellik uyarıyla işlendi.`);
-      }
-    } catch (error) {
-      setOpenApiError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setOpenApiSubmitting(false);
-    }
-  };
-
-  const handleConfirmOpenApiExport = async (options: OpenApiExportOptions) => {
-    if (!openApiExportCollection) return;
-    setOpenApiSubmitting(true);
-    setOpenApiError(null);
-    try {
-      await flushWorkspaceChanges();
-      const result = await exportCollectionOpenApi(openApiExportCollection, options);
-      if (result.cancelled) return;
-      setOpenApiExportCollection(null);
-      const grouped = result.grouped_request_count > 0
-        ? `\n${result.grouped_request_count} request aynı method/path altında örnek olarak gruplandı.`
-        : "";
-      const otherWarnings = result.warnings.filter(
-        (warning) => warning.code !== "duplicate-operation-grouped"
-      );
-      const warningSummary = otherWarnings.length > 0
-        ? `\n\nUyarılar:\n${otherWarnings
-            .slice(0, 5)
-            .map((warning) => `• ${warning.message}${warning.location ? ` (${warning.location})` : ""}`)
-            .join("\n")}${otherWarnings.length > 5 ? `\n• +${otherWarnings.length - 5} uyarı` : ""}`
-        : "";
-      window.alert(
-        `OpenAPI dışa aktarıldı: ${result.request_count} request, ${result.endpoint_count} operation.${grouped}${warningSummary}`
-      );
-    } catch (error) {
-      setOpenApiError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setOpenApiSubmitting(false);
     }
   };
 
@@ -417,11 +300,11 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
       <TopNavbar
         workspaceName={workspaceName}
         onChangeWorkspace={onChangeWorkspace}
-        onImportOpenApi={handleChooseOpenApi}
+        onImportOpenApi={openApi.openImport}
         onExportWorkspace={handleExportWorkspace}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        onOpenSettings={() => { setGlobalSettingsError(null); setGlobalSettingsOpen(true); }}
+        onOpenSettings={globalHttp.openDialog}
       />
 
       {/* Main Workspace */}
@@ -435,15 +318,15 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
           onCreateCollection={handleCreateCollection}
           onRenameCollection={handleRenameCollection}
           onDeleteCollection={handleDeleteCollectionWithCleanup}
-          onExportCollectionOpenApi={(collection) => {
-            setOpenApiError(null);
-            setOpenApiExportCollection(collection);
-          }}
+          onExportCollectionOpenApi={openApi.openExport}
+          onRunCollection={handleOpenCollectionRunner}
+          onRunFolder={handleOpenFolderRunner}
           onSelectSavedRequest={handleSelectSavedRequest}
           selectedSavedRequestId={activeTab.selectedSavedRequestId}
           history={history}
           onSelectHistory={handleSelectHistory}
           onClearHistory={() => void handleClearHistory()}
+          onDeleteHistory={handleDeleteHistoryItem}
           selectedHistoryId={activeTab.selectedHistoryId}
           environments={environments}
           activeEnvironmentId={activeEnvironmentId}
@@ -458,6 +341,7 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
           onRenameFolder={handleRenameFolder}
           onDeleteFolder={handleDeleteFolder}
           onDuplicateFolder={handleDuplicateFolder}
+          onMoveFolder={handleMoveFolder}
           onCreateRequest={handleCreateRequest}
           onRenameRequest={handleRenameRequest}
           onDuplicateRequest={handleDuplicateRequest}
@@ -494,9 +378,10 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
             tabs={tabsInfoList}
             activeTabId={activeTabId}
             onSelectTab={setActiveTabId}
-            onCloseTab={handleCloseTab}
+            onCloseTab={handleCloseWorkspaceTab}
             onReorderTab={handleReorderTab}
             onAddTab={handleAddTab}
+            runners={collectionRunner.runners}
             environments={environments}
             activeEnvironmentId={activeEnvironmentId}
             onSelectEnvironment={handleSelectEnvironment}
@@ -504,7 +389,29 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
 
           {/* Work Container */}
           <div className="flex-1 min-h-0 overflow-hidden bg-[#222222]">
-            {environmentEditorEnvironment ? (
+            {activeWorkspaceTab?.kind === "runner" ? (
+              (() => {
+                const runner = collectionRunner.runners.find(
+                  (item) => item.id === activeRunnerId,
+                );
+                return runner ? (
+                  <CollectionRunnerPanel
+                    runner={runner}
+                    environments={environments}
+                    onChangeConfiguration={(configuration) =>
+                      collectionRunner.updateConfiguration(runner.id, configuration)
+                    }
+                    onStart={() => void collectionRunner.startRun(runner.id)}
+                    onStop={() => collectionRunner.stopRun(runner.id)}
+                    onNewRun={() => collectionRunner.newRun(runner.id)}
+                    supportsCookiePersistence={platformCapabilities.desktop}
+                    consoleEvents={consoleStore.events.filter(
+                      (event) => event.source.runnerId === runner.id,
+                    )}
+                  />
+                ) : null;
+              })()
+            ) : environmentEditorEnvironment ? (
               <OverlayScrollArea containerClassName="h-full" axis="vertical" className="overflow-y-auto">
                 <EnvironmentEditor
                   key={environmentEditorEnvironment.id}
@@ -514,179 +421,68 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
                 />
               </OverlayScrollArea>
             ) : (
-              <div
-                ref={requestWorkspaceRef}
-                className={`flex h-full min-h-0 w-full flex-col ${isResizingResponse ? "select-none" : ""}`}
-              >
-                <OverlayScrollArea
-                  containerClassName="flex-1 min-h-0"
-                  axis="vertical"
-                  className="overflow-y-auto"
-                  style={{ padding: "10px 36px 28px" }}
-                >
-                  <div className="w-full flex flex-col gap-2">
-                  {/* URL Bar */}
-                  <UrlActionBar
-                    method={activeTab.method}
-                    title={requestDisplayName(activeTab)}
-                    breadcrumbItems={activeRequestBreadcrumb}
-                    onChangeTitle={(t) => updateActiveTab({ title: t })}
-                    onChangeMethod={(m) => updateActiveTab({ method: m as import("../types/request").HttpMethod })}
-                    url={activeTab.url}
-                    onChangeUrl={(u) => updateActiveTab({ url: u })}
-                    onSend={handleSendRequest}
-                    onSave={handleSaveRequest}
-                    loading={activeTab.loading}
-                  />
-
-                  {/* Request Section Tabs */}
-                  <RequestSectionTabs
-                    activeTab={activeTab.activeSectionTab}
-                    onOpenCookies={() => setCookieManagerOpen(true)}
-                    onTabChange={(tab) =>
-                      updateActiveTab({ activeSectionTab: tab as import("../types/request").RequestSectionTab })
-                    }
-                    headersCount={
-                      activeTab.headers.filter((h) => h.key.trim()).length
-                    }
-                    />
-
-                  {/* Request Section Content */}
-                  <div className="min-h-[250px]">
-                    {activeTab.activeSectionTab === "Params" && (
-                      <QueryParamsTable
-                        params={activeTab.queryParams}
-                        onChange={(p) => updateActiveTab({ queryParams: p })}
-                        auth={activeTab.auth}
-                      />
-                    )}
-                    {activeTab.activeSectionTab === "Authorization" && (
-                      <AuthEditor
-                        auth={activeTab.auth}
-                        onChange={(a) => updateActiveTab({ auth: a })}
-                      />
-                    )}
-                    {activeTab.activeSectionTab === "Headers" && (
-                      <HeadersEditor
-                        headers={activeTab.headers}
-                        onChange={(h) => updateActiveTab({ headers: h })}
-                        bodyType={activeTab.bodyType}
-                        auth={activeTab.auth}
-                      />
-                    )}
-                    {activeTab.activeSectionTab === "Body" && (
-                      <BodyEditor
-                        body={activeTab.body}
-                        bodyType={activeTab.bodyType}
-                        formFields={activeTab.formFields}
-                        binary={activeTab.binary}
-                        onChangeBody={(body) => updateActiveTab({ body })}
-                        onChangeBodyType={(bodyType) =>
-                          updateActiveTab({ bodyType })
-                        }
-                        onChangeFormFields={(formFields) =>
-                          updateActiveTab({ formFields })
-                        }
-                        onChangeBinary={(binary) =>
-                          updateActiveTab({ binary })
-                        }
-                        method={activeTab.method}
-                      />
-                    )}
-                    {activeTab.activeSectionTab === "Scripts" && (
-                      <ScriptsEditor
-                        value={activeTab.scripts}
-                        onChange={(scripts) => updateActiveTab({ scripts })}
-                      />
-                    )}
-                    {activeTab.activeSectionTab === "Settings" && (
-                      <RequestHttpSettingsEditor
-                        value={activeTab.settings}
-                        globalSettings={globalHttpSettings}
-                        platform={platformCapabilities.advancedHttpSettings ? "desktop" : "web"}
-                        onChange={(settings) => updateActiveTab({ settings })}
-                      />
-                    )}
-                  </div>
-
-                  </div>
-                </OverlayScrollArea>
-
-                {/* Fixed, resizable Response Panel */}
-                <div
-                  className="relative flex min-h-0 shrink-0 overflow-visible"
-                  style={{ height: responsePanelHeight }}
-                >
-                  <div
-                    role="separator"
-                    aria-label="Resize response panel"
-                    aria-orientation="horizontal"
-                    onPointerDown={handleResponseResizeStart}
-                    onPointerMove={handleResponseResizeMove}
-                    onPointerUp={handleResponseResizeEnd}
-                    onPointerCancel={handleResponseResizeEnd}
-                    className="absolute inset-x-0 -top-1.5 z-20 h-3 cursor-row-resize touch-none"
-                  >
-                    <div
-                      className={`absolute inset-x-0 top-1.5 h-px transition-colors ${
-                        isResizingResponse ? "bg-sky-500/80" : "bg-[#343434]"
-                      }`}
-                    />
-                  </div>
-
-                  <div className="flex h-full min-h-0 w-full overflow-hidden">
-                    <ResponsePlaceholder
-                      response={activeTab.response}
-                      loading={activeTab.loading}
-                      error={activeTab.error}
-                      scriptReports={activeTab.scriptReports}
-                    />
-                  </div>
-                </div>
-              </div>
+              <RequestWorkspacePanel
+                activeTab={activeTab}
+                breadcrumbItems={activeRequestBreadcrumb}
+                globalHttpSettings={globalHttp.settings}
+                requestWorkspaceRef={requestWorkspaceRef}
+                responsePanelHeight={responsePanelHeight}
+                isResizingResponse={isResizingResponse}
+                onUpdateTab={updateActiveTab}
+                onSend={handleSendRequest}
+                onSave={handleSaveRequest}
+                onSaveAs={handleSaveRequestAs}
+                consoleEvents={consoleStore.events}
+                onClearConsole={consoleStore.clear}
+                onOpenCookies={() => setCookieManagerOpen(true)}
+                onResponseResizeStart={handleResponseResizeStart}
+                onResponseResizeMove={handleResponseResizeMove}
+                onResponseResizeEnd={handleResponseResizeEnd}
+              />
             )}
           </div>
         </main>
       </div>
 
       {/* Save Request Dialog */}
-      {saveDialogOpen && (
+      {saveDialogMode && (
         <SaveRequestDialog
           collections={collections}
+          mode={saveDialogMode}
           onSave={handleConfirmSave}
-          onClose={() => setSaveDialogOpen(false)}
+          onClose={() => setSaveDialogMode(null)}
         />
       )}
 
-      {openApiImportDialogOpen && (
+      {openApi.importOpen && (
         <OpenApiImportDialog
-          submitting={openApiSubmitting}
-          error={openApiError}
-          onInspect={inspectOpenApi}
-          onResetError={() => setOpenApiError(null)}
-          onClose={() => !openApiSubmitting && setOpenApiImportDialogOpen(false)}
-          onConfirm={handleConfirmOpenApiImport}
+          submitting={openApi.submitting}
+          error={openApi.error}
+          onInspect={openApi.inspect}
+          onResetError={openApi.resetError}
+          onClose={openApi.closeImport}
+          onConfirm={openApi.confirmImport}
         />
       )}
 
-      {openApiExportCollection && (
+      {openApi.exportCollection && (
         <OpenApiExportDialog
-          collection={openApiExportCollection}
-          submitting={openApiSubmitting}
-          error={openApiError}
-          onClose={() => !openApiSubmitting && setOpenApiExportCollection(null)}
-          onConfirm={handleConfirmOpenApiExport}
+          collection={openApi.exportCollection}
+          submitting={openApi.submitting}
+          error={openApi.error}
+          onClose={openApi.closeExport}
+          onConfirm={openApi.confirmExport}
         />
       )}
 
-      {globalSettingsOpen && (
+      {globalHttp.open && (
         <GlobalSettingsDialog
-          settings={globalHttpSettings}
+          settings={globalHttp.settings}
           platform={platformCapabilities.advancedHttpSettings ? "desktop" : "web"}
-          saving={globalSettingsSaving}
-          error={globalSettingsError}
-          onClose={() => !globalSettingsSaving && setGlobalSettingsOpen(false)}
-          onSave={handleSaveGlobalSettings}
+          saving={globalHttp.saving}
+          error={globalHttp.error}
+          onClose={globalHttp.closeDialog}
+          onSave={globalHttp.save}
         />
       )}
 

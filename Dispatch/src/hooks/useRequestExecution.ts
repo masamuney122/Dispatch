@@ -1,18 +1,19 @@
 import { useCallback, type Dispatch, type SetStateAction } from "react";
 
-import { sendRequest } from "../services/api";
 import { loadHistory, saveHistory } from "../services/historyService";
 import {
-  resolveRequestVariables,
-  VariableResolutionError,
-} from "../services/environmentVariableResolver";
-import { executeRequestScript } from "../services/scriptService";
+  executeRequestCycle,
+  executionErrorMessage,
+  isVariableResolutionFailure,
+  RequestExecutionError,
+} from "../services/requestExecutionService";
 import type { Environment } from "../types/environment";
 import type { HistoryItem } from "../types/history";
 import type { ApiRequest } from "../types/request";
-import type { ScriptExecutionReport } from "../types/script";
 import type { RequestTabState } from "../types/tab";
-import { buildRequestUrl, createRequestPayload } from "../utils/requestDraft";
+import type { ConsoleEvent } from "../types/console";
+import { createRequestPayload } from "../utils/requestDraft";
+import { isSensitiveName } from "../services/console/redaction";
 
 interface RequestExecutionOptions {
   activeTab: RequestTabState;
@@ -25,12 +26,7 @@ interface RequestExecutionOptions {
     variables: Record<string, string>,
   ) => Promise<unknown>;
   setHistory: Dispatch<SetStateAction<HistoryItem[]>>;
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "string") return error;
-  return JSON.stringify(error);
+  appendConsoleEvents: (events: ConsoleEvent[]) => void;
 }
 
 function historyItem(
@@ -56,108 +52,79 @@ export function useRequestExecution({
   updateActiveTab,
   commitEnvironment,
   setHistory,
+  appendConsoleEvents,
 }: RequestExecutionOptions) {
   return useCallback(async () => {
     updateActiveTab({
       loading: true,
       error: null,
-      selectedSavedRequestId: null,
       scriptReports: [],
+      lastExecutedRequest: null,
     });
     const originalRequest = createRequestPayload(activeTab);
-    const scriptReports: ScriptExecutionReport[] = [];
 
     try {
       const activeEnvironment = environments.find(
         (environment) => environment.id === activeEnvironmentId,
       );
-      let runtimeRequest = originalRequest;
-      let runtimeVariables = { ...(activeEnvironment?.variables || {}) };
-
-      const preResult = await executeRequestScript({
-        phase: "pre-request",
-        source: activeTab.scripts.pre_request,
-        request: runtimeRequest,
-        environment: runtimeVariables,
+      const execution = await executeRequestCycle({
+        request: originalRequest,
+        scripts: activeTab.scripts,
+        environment: activeEnvironment?.variables || {},
         hasActiveEnvironment: Boolean(activeEnvironment),
+        telemetry: {
+          source: {
+            kind: "interactive",
+            requestId: activeTab.selectedSavedRequestId || activeTab.id,
+            requestName: activeTab.title,
+          },
+          append: appendConsoleEvents,
+          knownSecrets: Object.entries(activeEnvironment?.variables || {})
+            .filter(([name]) => isSensitiveName(name))
+            .map(([, value]) => value),
+        },
+        onEnvironmentMutated: activeEnvironment
+          ? async (variables) => {
+              await commitEnvironment(
+                activeEnvironment.id,
+                activeEnvironment.name,
+                variables,
+              );
+            }
+          : undefined,
       });
-      scriptReports.push(preResult.report);
-      updateActiveTab({ scriptReports: [...scriptReports] });
-      if (preResult.report.status === "failed") {
-        throw new Error(
-          `Pre-request script failed: ${preResult.report.error || "Unknown error"}`,
-        );
-      }
-      runtimeRequest = preResult.request;
-      runtimeVariables = preResult.environment;
-      if (activeEnvironment && preResult.environment_mutations.length > 0) {
-        await commitEnvironment(
-          activeEnvironment.id,
-          activeEnvironment.name,
-          runtimeVariables,
-        );
-      }
-
-      const resolvedTemplate = await resolveRequestVariables(
-        { request: runtimeRequest, queryParams: [] },
-        runtimeVariables,
-      );
-      const resolvedRequest: ApiRequest = {
-        ...resolvedTemplate.request,
-        url: buildRequestUrl(
-          resolvedTemplate.request.url,
-          resolvedTemplate.queryParams,
-        ),
-      };
-      const response = await sendRequest(resolvedRequest);
-      const postResult = await executeRequestScript({
-        phase: "post-response",
-        source: activeTab.scripts.post_response,
-        request: resolvedRequest,
-        response,
-        environment: runtimeVariables,
-        hasActiveEnvironment: Boolean(activeEnvironment),
-      });
-      scriptReports.push(postResult.report);
-      if (
-        postResult.report.status === "passed" &&
-        activeEnvironment &&
-        postResult.environment_mutations.length > 0
-      ) {
-        try {
-          await commitEnvironment(
-            activeEnvironment.id,
-            activeEnvironment.name,
-            postResult.environment,
-          );
-        } catch (commitError) {
-          postResult.report.status = "failed";
-          postResult.report.error = `Environment changes could not be saved: ${errorMessage(commitError)}`;
-        }
-      }
       updateActiveTab({
-        response,
+        response: execution.response,
         loading: false,
-        scriptReports: [...scriptReports],
+        scriptReports: execution.reports,
+        lastExecutedRequest: execution.request,
       });
-
       const item = historyItem(activeTab, originalRequest, {
-        status: response.status,
-        response_time_ms: response.response_time_ms,
+        status: execution.response.status,
+        response_time_ms: execution.response.response_time_ms,
         error: null,
       });
       await saveHistory(item);
       setHistory((await loadHistory()) || []);
       updateActiveTab({ selectedHistoryId: item.id });
     } catch (error) {
-      const message = errorMessage(error);
+      const message = executionErrorMessage(error);
+      const scriptReports =
+        error instanceof RequestExecutionError ? error.reports : [];
       updateActiveTab({
         error: message,
-        response: null,
+        response:
+          error instanceof RequestExecutionError
+            ? error.response || null
+            : null,
         loading: false,
         scriptReports: [...scriptReports],
+        lastExecutedRequest:
+          error instanceof RequestExecutionError
+            ? error.request || originalRequest
+            : originalRequest,
       });
-      if (error instanceof VariableResolutionError) return;
+      if (isVariableResolutionFailure(error)) return;
 
       const item = historyItem(activeTab, originalRequest, {
         status: null,
@@ -171,6 +138,7 @@ export function useRequestExecution({
   }, [
     activeEnvironmentId,
     activeTab,
+    appendConsoleEvents,
     commitEnvironment,
     environments,
     setHistory,

@@ -46,6 +46,43 @@ export const SettingsToggle = ({ checked, onChange, disabled = false, label }: {
 const BrowserManaged = () => <span className="text-[11px] font-medium text-zinc-500">Tarayıcı yönetir</span>;
 const WorkspaceManaged = () => <span className="text-[11px] font-medium text-zinc-500">Workspace cookie jar</span>;
 
+const NumberSetting = ({
+  value,
+  unit,
+  min,
+  max,
+  placeholder,
+  disabled = false,
+  onChange,
+}: {
+  value: number | "";
+  unit: string;
+  min: number;
+  max: number;
+  placeholder?: string;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+}) => (
+  <label className="flex h-8 overflow-hidden rounded-lg border border-[#484848] bg-[#202020] focus-within:border-[#ff6c37]">
+    <input
+      type="number"
+      min={min}
+      max={max}
+      disabled={disabled}
+      value={value}
+      placeholder={placeholder}
+      onChange={(event) => onChange(event.target.value)}
+      className="w-24 bg-transparent px-3 text-right text-xs text-zinc-200 outline-none disabled:opacity-40"
+    />
+    <span className="flex w-11 items-center justify-center border-l border-[#383838] text-[11px] text-zinc-500">
+      {unit}
+    </span>
+  </label>
+);
+
+const clampedNumber = (value: string, min: number, max: number, fallback: number) =>
+  Math.min(max, Math.max(min, Number(value) || fallback));
+
 export function GlobalHttpSettingsEditor({
   value,
   onChange,
@@ -65,6 +102,24 @@ export function GlobalHttpSettingsEditor({
           </select>
         ) : <BrowserManaged />}
       </SettingRow>
+      <SettingRow title="Request timeout" description="Request'in cevap bekleyeceği en uzun süre. Süre sınırını kaldırmak için 0 kullan.">
+        <NumberSetting
+          value={value.request_timeout_ms}
+          unit="ms"
+          min={0}
+          max={3_600_000}
+          onChange={(next) => onChange({ ...value, request_timeout_ms: clampedNumber(next, 0, 3_600_000, 0) })}
+        />
+      </SettingRow>
+      <SettingRow title="Maximum response size" description="İndirilecek response body boyutunu sınırlar. Sınırı kaldırmak için 0 kullan.">
+        <NumberSetting
+          value={value.max_response_size_mb}
+          unit="MB"
+          min={0}
+          max={1_024}
+          onChange={(next) => onChange({ ...value, max_response_size_mb: clampedNumber(next, 0, 1_024, 0) })}
+        />
+      </SettingRow>
       <SettingRow title="SSL certificate verification" description="Geçersiz veya güvenilmeyen TLS sertifikalarında request'i durdurur.">
         {desktop ? <SettingsToggle checked={value.verify_ssl} onChange={() => onChange({ ...value, verify_ssl: !value.verify_ssl })} /> : <BrowserManaged />}
       </SettingRow>
@@ -79,9 +134,16 @@ export function GlobalHttpSettingsEditor({
           <input type="number" min={1} max={100} disabled={!value.follow_redirects} value={value.max_redirects} onChange={(event) => onChange({ ...value, max_redirects: Math.min(100, Math.max(1, Number(event.target.value) || 1)) })} className="h-8 w-24 rounded-lg border border-[#484848] bg-[#202020] px-3 text-right text-xs text-zinc-200 outline-none focus:border-[#ff6c37] disabled:opacity-40" />
         ) : <BrowserManaged />}
       </SettingRow>
+      <SettingRow title="Cookies" description="Kapalı olduğunda cookie'ler kaydedilmez veya request ile gönderilmez.">
+        <SettingsToggle
+          checked={value.cookies_enabled}
+          onChange={() => onChange({ ...value, cookies_enabled: !value.cookies_enabled })}
+          label="Enable cookies"
+        />
+      </SettingRow>
       <SettingRow title="Cookie credentials" description="Cookie'lerin request ile gönderilme politikasını belirler.">
         {desktop ? <WorkspaceManaged /> : (
-          <select value={value.cookie_credentials} onChange={(event) => onChange({ ...value, cookie_credentials: event.target.value as CookieCredentials })} className="h-8 w-40 rounded-lg border border-[#484848] bg-[#202020] px-3 text-xs text-zinc-200 outline-none focus:border-[#ff6c37]">
+          <select disabled={!value.cookies_enabled} value={value.cookie_credentials} onChange={(event) => onChange({ ...value, cookie_credentials: event.target.value as CookieCredentials })} className="h-8 w-40 rounded-lg border border-[#484848] bg-[#202020] px-3 text-xs text-zinc-200 outline-none focus:border-[#ff6c37] disabled:opacity-40">
             <option value="omit">Omit</option><option value="same-origin">Same origin</option><option value="include">Include</option>
           </select>
         )}
@@ -143,7 +205,7 @@ export function RequestHttpSettingsEditor({
       </SettingRow>
       <SettingRow title="Cookie credentials" description="Web fetch request'i için cookie gönderme politikasını değiştirir.">
         {desktop ? <WorkspaceManaged /> : <>
-          <select value={value.cookie_credentials ?? ""} onChange={(event) => event.target.value ? onChange({ ...value, cookie_credentials: event.target.value as CookieCredentials }) : clear("cookie_credentials")} className="h-8 w-44 rounded-lg border border-[#484848] bg-[#202020] px-3 text-xs text-zinc-200 outline-none focus:border-[#ff6c37]">
+          <select disabled={!resolved.cookies_enabled} value={value.cookie_credentials ?? ""} onChange={(event) => event.target.value ? onChange({ ...value, cookie_credentials: event.target.value as CookieCredentials }) : clear("cookie_credentials")} className="h-8 w-44 rounded-lg border border-[#484848] bg-[#202020] px-3 text-xs text-zinc-200 outline-none focus:border-[#ff6c37] disabled:opacity-40">
             <option value="">Global ({globalSettings.cookie_credentials})</option><option value="omit">Omit</option><option value="same-origin">Same origin</option><option value="include">Include</option>
           </select>
           {footer("cookie_credentials", globalSettings.cookie_credentials)}

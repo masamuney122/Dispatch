@@ -157,6 +157,133 @@ pub(super) fn duplicate(
         .ok_or_else(|| "Duplicated folder could not be created".to_string())
 }
 
+pub(super) fn move_between_collections(
+    collections: &mut [Collection],
+    source_collection_id: &str,
+    folder_id: &str,
+    target_collection_id: &str,
+    target_parent_folder_id: Option<String>,
+    timestamp: &str,
+) -> Result<Folder, String> {
+    if source_collection_id == target_collection_id {
+        return Err("Folder already belongs to the target collection".to_string());
+    }
+
+    let source_index = collections
+        .iter()
+        .position(|collection| collection.id == source_collection_id)
+        .ok_or_else(|| format!("Collection not found: {source_collection_id}"))?;
+    let target_index = collections
+        .iter()
+        .position(|collection| collection.id == target_collection_id)
+        .ok_or_else(|| format!("Collection not found: {target_collection_id}"))?;
+
+    let (source, target) = if source_index < target_index {
+        let (before_target, from_target) = collections.split_at_mut(target_index);
+        (&mut before_target[source_index], &mut from_target[0])
+    } else {
+        let (before_source, from_source) = collections.split_at_mut(source_index);
+        (&mut from_source[0], &mut before_source[target_index])
+    };
+
+    move_subtree(
+        source,
+        target,
+        folder_id,
+        target_parent_folder_id,
+        timestamp,
+    )
+}
+
+fn move_subtree(
+    source: &mut Collection,
+    target: &mut Collection,
+    folder_id: &str,
+    target_parent_folder_id: Option<String>,
+    timestamp: &str,
+) -> Result<Folder, String> {
+    validate_parent(target, target_parent_folder_id.as_deref())?;
+    let source_root = source
+        .folders
+        .iter()
+        .find(|folder| folder.id == folder_id)
+        .cloned()
+        .ok_or_else(|| format!("Folder not found: {folder_id}"))?;
+    let subtree_ids = descendant_ids(&source.folders, folder_id);
+    let moved_request_ids = source
+        .requests
+        .iter()
+        .filter(|request| {
+            request
+                .folder_id
+                .as_ref()
+                .is_some_and(|id| subtree_ids.contains(id))
+        })
+        .map(|request| request.id.clone())
+        .collect::<HashSet<_>>();
+
+    let target_item_ids = target
+        .folders
+        .iter()
+        .map(|folder| folder.id.clone())
+        .chain(target.requests.iter().map(|request| request.id.clone()))
+        .collect::<HashSet<_>>();
+    if let Some(id) = subtree_ids
+        .iter()
+        .map(String::as_str)
+        .chain(moved_request_ids.iter().map(String::as_str))
+        .find(|id| target_item_ids.contains(*id))
+    {
+        return Err(format!("Target collection already contains item id: {id}"));
+    }
+
+    let target_order = sibling_max_order(target, &target_parent_folder_id) + 1;
+    let mut moved_folders = source
+        .folders
+        .iter()
+        .filter(|folder| subtree_ids.contains(&folder.id))
+        .cloned()
+        .collect::<Vec<_>>();
+    let mut moved_requests = source
+        .requests
+        .iter()
+        .filter(|request| moved_request_ids.contains(&request.id))
+        .cloned()
+        .collect::<Vec<_>>();
+
+    for folder in &mut moved_folders {
+        folder.collection_id = target.id.clone();
+        folder.updated_at = timestamp.to_string();
+        if folder.id == folder_id {
+            folder.parent_folder_id = target_parent_folder_id.clone();
+            folder.order = target_order;
+        }
+    }
+    for request in &mut moved_requests {
+        request.updated_at = timestamp.to_string();
+    }
+
+    source
+        .folders
+        .retain(|folder| !subtree_ids.contains(&folder.id));
+    source
+        .requests
+        .retain(|request| !moved_request_ids.contains(&request.id));
+    normalize_sibling_orders(source, &source_root.parent_folder_id, timestamp);
+    source.updated_at = timestamp.to_string();
+
+    target.folders.extend(moved_folders);
+    target.requests.extend(moved_requests);
+    target.updated_at = timestamp.to_string();
+
+    target
+        .folders
+        .iter()
+        .find(|folder| folder.id == folder_id)
+        .cloned()
+        .ok_or_else(|| "Moved folder could not be found in target collection".to_string())
+}
+
 pub(super) fn descendant_ids(folders: &[Folder], root_id: &str) -> HashSet<String> {
     let mut ids = HashSet::from([root_id.to_string()]);
     let mut changed = true;
@@ -211,6 +338,43 @@ fn shift_siblings_after(collection: &mut Collection, parent: &Option<String>, or
         .filter(|item| &item.folder_id == parent && item.order > order)
     {
         request.order += 1;
+    }
+}
+
+fn normalize_sibling_orders(collection: &mut Collection, parent: &Option<String>, timestamp: &str) {
+    let mut siblings = collection
+        .folders
+        .iter()
+        .filter(|folder| &folder.parent_folder_id == parent)
+        .map(|folder| (folder.order, true, folder.id.clone()))
+        .chain(
+            collection
+                .requests
+                .iter()
+                .filter(|request| &request.folder_id == parent)
+                .map(|request| (request.order, false, request.id.clone())),
+        )
+        .collect::<Vec<_>>();
+    siblings.sort_by(|left, right| {
+        left.0
+            .cmp(&right.0)
+            .then_with(|| right.1.cmp(&left.1))
+            .then_with(|| left.2.cmp(&right.2))
+    });
+    for (order, (_, is_folder, id)) in siblings.into_iter().enumerate() {
+        if is_folder {
+            if let Some(folder) = collection.folders.iter_mut().find(|folder| folder.id == id) {
+                folder.order = order as i64;
+                folder.updated_at = timestamp.to_string();
+            }
+        } else if let Some(request) = collection
+            .requests
+            .iter_mut()
+            .find(|request| request.id == id)
+        {
+            request.order = order as i64;
+            request.updated_at = timestamp.to_string();
+        }
     }
 }
 

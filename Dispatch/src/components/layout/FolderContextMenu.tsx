@@ -1,4 +1,8 @@
-import { useEffect, useRef } from "react";
+import {
+  ContextMenu,
+  ContextMenuDivider,
+  ContextMenuItem,
+} from "../common/ContextMenu";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -8,8 +12,11 @@ export interface FolderContextMenuProps {
   onClose: () => void;
   onAddRequest: () => void;
   onAddFolder: () => void;
+  onRun?: () => void;
+  runLabel?: string;
   onRename: () => void;
   onDuplicate?: () => void;
+  onMove?: () => void;
   onExportOpenApi?: () => void;
   onDelete: () => void;
 }
@@ -22,43 +29,6 @@ const BackspaceIcon = () => (
   </svg>
 );
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-const MenuItem = ({
-  onClick,
-  danger,
-  shortcutText,
-  shortcutIcon,
-  children,
-}: {
-  onClick: () => void;
-  danger?: boolean;
-  shortcutText?: string;
-  shortcutIcon?: React.ReactNode;
-  children: React.ReactNode;
-}) => (
-  <div style={{ padding: '2px 6px' }}>
-    <button
-      onClick={onClick}
-      className={`w-full flex items-center justify-between text-left rounded-md transition-colors hover:bg-zinc-800 ${danger ? "text-red-400" : "text-zinc-200"}`}
-      style={{
-        fontSize: '13px',
-        padding: '6px 12px',
-      }}
-    >
-      <span>{children}</span>
-      {(shortcutText || shortcutIcon) && (
-        <span style={{ fontFamily: 'sans-serif', letterSpacing: '0.025em' }} className="flex items-center text-[#888888]">
-          {shortcutText}
-          {shortcutIcon}
-        </span>
-      )}
-    </button>
-  </div>
-);
-
-const Divider = () => <div className="border-t border-zinc-700" style={{ margin: '6px 16px' }} />;
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export const FolderContextMenu: React.FC<FolderContextMenuProps> = ({
@@ -67,81 +37,59 @@ export const FolderContextMenu: React.FC<FolderContextMenuProps> = ({
   onClose,
   onAddRequest,
   onAddFolder,
+  onRun,
+  runLabel = "Run collection",
   onRename,
   onDuplicate,
+  onMove,
   onExportOpenApi,
   onDelete,
 }) => {
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  // Close on outside click or Escape
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("mousedown", handleClick);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [onClose]);
-
-  // Clamp position to viewport
-  const menuWidth = 240;
-  const menuHeight = 240;
-  const clampedX = Math.min(x, window.innerWidth - menuWidth - 8);
-  const clampedY = Math.min(y, window.innerHeight - menuHeight - 8);
-
   const handle = (fn: () => void) => () => {
     fn();
     onClose();
   };
 
   return (
-    <div
-      ref={menuRef}
-      className="fixed z-[200] rounded-lg border border-[#383838] bg-[#242424] shadow-2xl"
-      style={{ 
-        left: clampedX, 
-        top: clampedY,
-        width: '170px',
-        padding: '6px 0',
-      }}
-    >
-      <MenuItem onClick={handle(onAddRequest)}>
+    <ContextMenu x={x} y={y} onClose={onClose}>
+      <ContextMenuItem onClick={handle(onAddRequest)}>
         Add request
-      </MenuItem>
-      <MenuItem onClick={handle(onAddFolder)}>
+      </ContextMenuItem>
+      <ContextMenuItem onClick={handle(onAddFolder)}>
         Add folder
-      </MenuItem>
+      </ContextMenuItem>
+      {onRun && (
+        <ContextMenuItem onClick={handle(onRun)}>
+          {runLabel}
+        </ContextMenuItem>
+      )}
 
-      <Divider />
+      <ContextMenuDivider />
 
-      <MenuItem onClick={handle(onRename)} shortcutText="⌘E">
+      <ContextMenuItem onClick={handle(onRename)} trailing="⌘E">
         Rename
-      </MenuItem>
+      </ContextMenuItem>
       {onDuplicate && (
-        <MenuItem onClick={handle(onDuplicate)} shortcutText="⌘D">
+        <ContextMenuItem onClick={handle(onDuplicate)} trailing="⌘D">
           Duplicate
-        </MenuItem>
+        </ContextMenuItem>
+      )}
+      {onMove && (
+        <ContextMenuItem onClick={handle(onMove)}>
+          Move
+        </ContextMenuItem>
       )}
       {onExportOpenApi && (
-        <MenuItem onClick={handle(onExportOpenApi)}>
+        <ContextMenuItem onClick={handle(onExportOpenApi)}>
           Export as OpenAPI
-        </MenuItem>
+        </ContextMenuItem>
       )}
 
-      <Divider />
+      <ContextMenuDivider />
 
-      <MenuItem onClick={handle(onDelete)} danger shortcutIcon={<BackspaceIcon />}>
+      <ContextMenuItem onClick={handle(onDelete)} danger trailing={<BackspaceIcon />}>
         Delete
-      </MenuItem>
-    </div>
+      </ContextMenuItem>
+    </ContextMenu>
   );
 };

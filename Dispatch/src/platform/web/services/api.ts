@@ -5,9 +5,17 @@ import type { ApiResponse } from "../../../types/response";
 import { loadGlobalHttpSettings } from "./httpSettingsService";
 import { classifyResponseBodyCore, prepareRequestCore } from "./wasmClient";
 
-export async function sendRequest(request: ApiRequest): Promise<ApiResponse> {
+export async function sendBrowserApiRequest(
+  request: ApiRequest,
+  cookiesEnabledOverride?: boolean,
+): Promise<ApiResponse> {
   const globalSettings = await loadGlobalHttpSettings();
-  const prepared = await prepareRequestCore(request, globalSettings);
+  const prepared = await prepareRequestCore(
+    request,
+    cookiesEnabledOverride === undefined
+      ? globalSettings
+      : { ...globalSettings, cookies_enabled: cookiesEnabledOverride },
+  );
   const response = await sendBrowserRequest(prepared);
   const bodyKind = await classifyResponseBodyCore(
     response.contentType,
@@ -21,9 +29,19 @@ export async function sendRequest(request: ApiRequest): Promise<ApiResponse> {
     body_base64: bodyKind === "binary" ? bytesToBase64(response.bytes) : undefined,
     body_size: response.sizeBytes,
     headers: response.headers,
+    request_headers: response.requestHeaders,
+    network: {
+      transport: "browser",
+      http_version: null,
+      remote_address: null,
+    },
     cookies: [],
     cookie_handling: "browser",
   };
+}
+
+export async function sendRequest(request: ApiRequest): Promise<ApiResponse> {
+  return sendBrowserApiRequest(request);
 }
 
 export async function getAuthorizationCodeToken(request?: unknown): Promise<string> {

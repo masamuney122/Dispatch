@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Collection } from "../../types/collection";
 import type { OpenApiExportOptions } from "../../types/openapi";
-import { DialogFrame, Field, inputClass, PrimaryButton, SecondaryButton } from "./OpenApiImportDialog";
+import { DialogFrame, Field, inputClass, PrimaryButton, SecondaryButton } from "./DialogPrimitives";
 
 interface OpenApiExportDialogProps {
   collection: Collection;

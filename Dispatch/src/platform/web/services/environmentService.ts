@@ -13,7 +13,18 @@ interface MutationResult {
   environment: Environment | null;
 }
 
-async function mutate(
+let mutationQueue: Promise<void> = Promise.resolve();
+
+function enqueueMutation<T>(operation: () => Promise<T>): Promise<T> {
+  const result = mutationQueue.then(operation, operation);
+  mutationQueue = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
+
+async function performMutation(
   mutation: Record<string, unknown>,
   needsEntityId = false,
   persistDocument = true,
@@ -43,6 +54,16 @@ async function mutate(
     await storeActiveEnvironment(workspaceId, result.active_environment_id ?? "");
   }
   return result;
+}
+
+function mutate(
+  mutation: Record<string, unknown>,
+  needsEntityId = false,
+  persistDocument = true,
+): Promise<MutationResult> {
+  return enqueueMutation(() =>
+    performMutation(mutation, needsEntityId, persistDocument),
+  );
 }
 
 function requireEnvironment(result: MutationResult): Environment {

@@ -4,15 +4,39 @@ import type { ScriptExecutionReport } from "../../types/script";
 import { ResponseBodyView, type ResponseBodyMode } from "../response/ResponseBodyView";
 import { STATUS_TEXT, formatSize, getHeader, getResponseBodyKind, getStatusStyle, responseKindLabel } from "../../utils/responseUtils";
 import { OverlayScrollArea } from "../common/OverlayScrollArea";
+import type { ConsoleEvent, ConsoleEventLevel, ConsoleEventType } from "../../types/console";
+import { ConsoleMultiSelect } from "../console/ConsoleMultiSelect";
+import {
+  RequestConsole,
+  type ConsoleLevelFilter,
+  type ConsoleTypeFilter,
+} from "./RequestConsole";
 
 interface ResponsePlaceholderProps {
   response: ApiResponse | null;
   loading: boolean;
   error: string | null;
   scriptReports: ScriptExecutionReport[];
+  consoleEvents: ConsoleEvent[];
+  onClearConsole: () => void;
 }
 
 type ResponseSection = "body" | "cookies" | "headers" | "tests" | "console";
+const CONSOLE_TYPE_OPTIONS = [
+  { value: "network", label: "Network" },
+  { value: "script", label: "Script" },
+  { value: "test", label: "Tests" },
+  { value: "cookie", label: "Cookies" },
+  { value: "error", label: "Errors" },
+] as const satisfies ReadonlyArray<{ value: ConsoleEventType; label: string }>;
+const CONSOLE_LEVEL_OPTIONS = [
+  { value: "debug", label: "Debug" },
+  { value: "log", label: "Log" },
+  { value: "info", label: "Info" },
+  { value: "warning", label: "Warning" },
+  { value: "error", label: "Error" },
+] as const satisfies ReadonlyArray<{ value: ConsoleEventLevel; label: string }>;
+
 const getErrorHelpText = (error: string) => {
   const normalized = error.toLowerCase();
   if (normalized.includes("refused") || normalized.includes("error sending request")) {
@@ -30,9 +54,12 @@ const getErrorHelpText = (error: string) => {
   return "Review the request details and try sending it again.";
 };
 
-export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ response, loading, error, scriptReports }) => {
+export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ response, loading, error, scriptReports, consoleEvents, onClearConsole }) => {
   const [section, setSection] = useState<ResponseSection>("body");
   const [bodyMode, setBodyMode] = useState<ResponseBodyMode>("pretty");
+  const [consoleType, setConsoleType] = useState<ConsoleTypeFilter>(() => CONSOLE_TYPE_OPTIONS.map((option) => option.value));
+  const [consoleLevel, setConsoleLevel] = useState<ConsoleLevelFilter>(() => CONSOLE_LEVEL_OPTIONS.map((option) => option.value));
+  const [showConsoleTimestamps, setShowConsoleTimestamps] = useState(true);
 
   const responseData = useMemo(() => {
     if (!response) return null;
@@ -67,12 +94,6 @@ export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ respon
     ),
     [scriptReports]
   );
-  const scriptLogs = useMemo(
-    () => scriptReports.flatMap((report) =>
-      report.logs.map((log) => ({ ...log, phase: report.phase }))
-    ),
-    [scriptReports]
-  );
   const scriptFailures = scriptReports.filter((report) => report.status === "failed");
 
   const sectionTabs: { key: ResponseSection; label: string; suffix?: React.ReactNode }[] = [
@@ -80,7 +101,7 @@ export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ respon
     { key: "cookies", label: "Cookies", suffix: response?.cookies?.length ? <span className="ml-0.5 font-mono text-[10px] text-zinc-500">{response.cookies.length}</span> : undefined },
     { key: "headers", label: "Headers", suffix: <span className="ml-0.5 font-mono text-[10px] text-zinc-500">{responseData?.headers.length || 0}</span> },
     { key: "tests", label: "Tests", suffix: scriptTests.length ? <span className="ml-0.5 font-mono text-[10px] text-zinc-500">{scriptTests.length}</span> : undefined },
-    { key: "console", label: "Console", suffix: scriptLogs.length ? <span className="ml-0.5 font-mono text-[10px] text-zinc-500">{scriptLogs.length}</span> : undefined },
+    { key: "console", label: "Console", suffix: consoleEvents.length ? <span className="ml-0.5 font-mono text-[10px] text-zinc-500">{consoleEvents.length}</span> : undefined },
   ];
 
   return (
@@ -107,23 +128,55 @@ export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ respon
 
         </div>
 
-        {response && responseData && (
-          <div className="flex items-center gap-5 text-[13.5px] font-mono">
-            <span className={`font-semibold ${getStatusStyle(response.status)}`}>
-              {response.status} {STATUS_TEXT[response.status] || "OK"}
-            </span>
-            <span className="text-[#969696]">
-              {response.response_time_ms} ms
-            </span>
-            <span className="text-[#969696]">
-              {formatSize(responseData.size)}
-            </span>
+        {(section === "console" || (response && responseData)) && (
+          <div className="flex items-center gap-3 text-[13.5px] font-mono">
+            {section === "console" && (
+              <>
+                <ConsoleMultiSelect
+                  allLabel="All events"
+                  groupLabel="Event types"
+                  options={CONSOLE_TYPE_OPTIONS}
+                  selected={consoleType}
+                  onChange={setConsoleType}
+                />
+                <ConsoleMultiSelect
+                  allLabel="All levels"
+                  groupLabel="Log levels"
+                  options={CONSOLE_LEVEL_OPTIONS}
+                  selected={consoleLevel}
+                  onChange={setConsoleLevel}
+                />
+                <label className="flex h-6 cursor-pointer items-center gap-1.5 font-sans text-[11px] text-zinc-400">
+                  <input
+                    type="checkbox"
+                    checked={showConsoleTimestamps}
+                    onChange={(event) => setShowConsoleTimestamps(event.target.checked)}
+                    className="h-3.5 w-3.5 accent-[#ff6c37]"
+                  />
+                  Timestamp
+                </label>
+                <button type="button" disabled={consoleEvents.length === 0} onClick={onClearConsole} className="rounded-md bg-[#353535] px-4 py-1 font-sans text-xs font-semibold text-zinc-200 transition-colors hover:bg-[#414141] disabled:cursor-default disabled:opacity-40">Clear</button>
+              </>
+            )}
+            {response && responseData && (
+              <>
+                <span className={`font-semibold ${getStatusStyle(response.status)}`}>
+                  {response.status} {STATUS_TEXT[response.status] || "OK"}
+                </span>
+                <span className="text-[#969696]">
+                  {response.response_time_ms} ms
+                </span>
+                <span className="text-[#969696]">
+                  {formatSize(responseData.size)}
+                </span>
+              </>
+            )}
           </div>
         )}
       </div>
 
       {/* Loading state */}
-      {loading && (
+      {loading && section !== "console" && (
         <div className="flex-1 flex flex-col items-center justify-center gap-5">
           <div className="relative w-10 h-10">
             <div className="absolute inset-0 rounded-full border-[3px] border-[#2a2a2a]" />
@@ -325,20 +378,13 @@ export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ respon
         </OverlayScrollArea>
       )}
 
-      {!loading && section === "console" && (
-        <OverlayScrollArea containerClassName="flex-1 min-h-0" axis="vertical" className="overflow-y-auto">
-          <div className="px-9 py-4 font-mono text-[11px] leading-5 select-text">
-            {scriptLogs.map((log, index) => (
-              <div key={`${log.phase}:${index}`} className="flex gap-3 border-b border-[#2e2e2e] py-1.5 last:border-b-0">
-                <span className="w-24 shrink-0 text-[9px] text-zinc-600">{log.phase}</span>
-                <span className={log.level === "error" ? "text-rose-300" : log.level === "warn" ? "text-amber-300" : log.level === "info" ? "text-sky-300" : "text-zinc-300"}>{log.message}</span>
-              </div>
-            ))}
-            {scriptLogs.length === 0 && (
-              <div className="flex h-28 items-center justify-center font-sans text-xs text-zinc-500">No console output.</div>
-            )}
-          </div>
-        </OverlayScrollArea>
+      {section === "console" && (
+        <RequestConsole
+          events={consoleEvents}
+          typeFilter={consoleType}
+          levelFilter={consoleLevel}
+          showTimestamps={showConsoleTimestamps}
+        />
       )}
 
       {/* No response yet */}

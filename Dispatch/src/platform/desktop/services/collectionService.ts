@@ -40,6 +40,18 @@ export const deleteFolder = (collectionId: string, folderId: string) =>
 export const duplicateFolder = (collectionId: string, folderId: string) =>
   invoke<Folder>("duplicate_folder", { collectionId, folderId });
 
+export const moveFolder = (
+  sourceCollectionId: string,
+  folderId: string,
+  targetCollectionId: string,
+  targetParentFolderId: string | null,
+) => invoke<Folder>("move_folder", {
+  sourceCollectionId,
+  folderId,
+  targetCollectionId,
+  targetParentFolderId,
+});
+
 // ── Request ───────────────────────────────────────────────────────────────────
 
 export const createRequestInCollection = (

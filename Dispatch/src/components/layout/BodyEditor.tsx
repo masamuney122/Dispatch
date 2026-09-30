@@ -89,64 +89,83 @@ export const BodyEditor: React.FC<BodyEditorProps> = ({
   const addField = () => onChangeFormFields([...formFields, { key: "", value: "" }]);
 
   const renderFormFields = () => (
-    <div className="border border-[#3a3a3a] rounded-md bg-[#212121] overflow-hidden">
-      <table className="w-full text-left border-collapse text-xs">
+    <div className="border border-[#383838] rounded-lg bg-[#202020] overflow-hidden shadow-sm">
+      <table className="w-full text-left border-collapse text-xs table-fixed">
         <thead>
-          <tr className="bg-[#242424] border-b border-[#343434] text-zinc-400 font-semibold select-none text-xs">
-            <th className="w-1/3" style={{ padding: '12px 24px' }}>Key</th>
-            <th className="border-l border-[#2e2e2e] w-1/3" style={{ padding: '12px 24px' }}>Value</th>
-            <th className="border-l border-[#2e2e2e] flex items-center justify-between" style={{ padding: '12px 24px' }}>
-              <span>Description</span>
-              <div className="flex items-center gap-3 text-zinc-400 font-normal">
-                <button onClick={addField} className="hover:underline cursor-pointer text-sky-400 font-medium">
-                  + Add
-                </button>
-                <span className="hover:underline cursor-pointer">Bulk Edit</span>
-                <span className="cursor-pointer tracking-widest font-bold">...</span>
+          <tr className="bg-[#222222] border-b border-[#2e2e2e] text-zinc-400 font-semibold select-none text-xs">
+            <th className="w-1/3 border-r border-[#2e2e2e]" style={{ padding: "8px 16px" }}>Key</th>
+            <th className="w-1/3 border-r border-[#2e2e2e]" style={{ padding: "8px 16px" }}>Value</th>
+            <th className="w-1/3" style={{ padding: "8px 16px" }}>
+              <div className="flex items-center justify-between">
+                <span>Description</span>
+                <div className="flex items-center gap-3 text-zinc-400 font-normal">
+                  <button onClick={addField} className="hover:underline cursor-pointer text-sky-400 font-medium">
+                    + Add
+                  </button>
+                </div>
               </div>
             </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-[#282828]">
-          {formFields.length === 0 ? (
-            <tr onClick={addField} className="h-9 hover:bg-[#242424] transition-colors cursor-text">
-              <td className="text-zinc-600 font-mono" style={{ padding: '12px 24px' }}>Key</td>
-              <td className="border-l border-[#2e2e2e] text-zinc-600 font-mono" style={{ padding: '12px 24px' }}>Value</td>
-              <td className="border-l border-[#2e2e2e] text-zinc-600 italic" style={{ padding: '12px 24px' }}>Description</td>
-            </tr>
-          ) : (
-            formFields.map((field, index) => (
-              <tr key={index} className="hover:bg-[#202020] transition-colors group">
-                <td style={{ padding: '8px 24px' }}>
+          {formFields.map((field, index) => (
+            <tr key={index} className="hover:bg-[#202020] transition-colors group">
+              <td className="border-r border-[#2e2e2e]" style={{ padding: "4px 12px" }}>
+                <input
+                  type="text"
+                  value={field.key}
+                  onChange={(event) => updateField(index, "key", event.target.value)}
+                  placeholder="Key"
+                  className="w-full bg-transparent px-1 py-1 font-mono text-xs text-zinc-200 focus:outline-none focus:bg-[#2a2a2a] rounded"
+                />
+              </td>
+              <td className="border-r border-[#2e2e2e]" style={{ padding: "4px 16px" }}>
+                <input
+                  type="text"
+                  value={field.value}
+                  onChange={(event) => updateField(index, "value", event.target.value)}
+                  placeholder="Value"
+                  className="w-full bg-transparent px-1 py-1 font-mono text-xs text-zinc-200 focus:outline-none focus:bg-[#2a2a2a] rounded"
+                />
+              </td>
+              <td style={{ padding: "4px 16px" }}>
+                <div className="flex items-center justify-between">
                   <input
                     type="text"
-                    value={field.key}
-                    onChange={(event) => updateField(index, "key", event.target.value)}
-                    placeholder="Key"
-                    className="w-full bg-transparent px-1 py-1 text-zinc-200 font-mono text-xs focus:outline-none"
+                    placeholder="Description"
+                    className="w-full bg-transparent px-1 py-1 text-[11px] text-zinc-500 italic focus:outline-none focus:bg-[#2a2a2a] rounded mr-2"
                   />
-                </td>
-                <td className="border-l border-[#2e2e2e]" style={{ padding: '8px 24px' }}>
-                  <input
-                    type="text"
-                    value={field.value}
-                    onChange={(event) => updateField(index, "value", event.target.value)}
-                    placeholder="Value"
-                    className="w-full bg-transparent px-1 py-1 text-zinc-200 font-mono text-xs focus:outline-none"
-                  />
-                </td>
-                <td className="border-l border-[#2e2e2e] flex items-center justify-between" style={{ padding: '8px 24px' }}>
-                  <span className="text-zinc-500 text-xs italic">Description</span>
                   <button
                     onClick={() => onChangeFormFields(formFields.filter((_, itemIndex) => itemIndex !== index))}
-                    className="text-zinc-500 hover:text-red-400 p-1 text-sm font-bold"
+                    className="text-zinc-600 hover:text-red-400 p-1 text-sm font-bold opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Remove field"
                   >
                     ×
                   </button>
-                </td>
-              </tr>
-            ))
-          )}
+                </div>
+              </td>
+            </tr>
+          ))}
+
+          <tr className="hover:bg-[#202020] transition-colors group cursor-text" onClick={addField}>
+            <td className="border-r border-[#2e2e2e]" style={{ padding: "4px 12px" }}>
+              <input
+                type="text"
+                placeholder="Key"
+                className="w-full bg-transparent px-1 py-1 font-mono text-xs focus:outline-none text-zinc-500 pointer-events-none"
+              />
+            </td>
+            <td className="border-r border-[#2e2e2e]" style={{ padding: "4px 16px" }}>
+              <input
+                type="text"
+                placeholder="Value"
+                className="w-full bg-transparent px-1 py-1 font-mono text-xs focus:outline-none text-zinc-500 pointer-events-none"
+              />
+            </td>
+            <td style={{ padding: "4px 16px" }}>
+              <span className="text-zinc-500 text-[11px] italic px-1 block py-1">Description</span>
+            </td>
+          </tr>
         </tbody>
       </table>
     </div>

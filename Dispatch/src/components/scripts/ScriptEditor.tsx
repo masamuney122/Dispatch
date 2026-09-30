@@ -155,6 +155,49 @@ const dispatchTheme = EditorView.theme({
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
     backgroundColor: "rgba(91, 105, 130, 0.22)",
   },
+  ".cm-tooltip": {
+    backgroundColor: "var(--dispatch-script-popup)",
+    border: "1px solid var(--dispatch-script-popup-border)",
+    color: "var(--dispatch-script-popup-text)",
+  },
+  ".cm-tooltip-autocomplete": {
+    borderRadius: "6px",
+    boxShadow: "0 10px 30px rgba(0, 0, 0, 0.32)",
+    overflow: "hidden",
+  },
+  ".cm-tooltip-autocomplete > ul": {
+    maxHeight: "230px",
+    fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, monospace",
+    scrollbarColor: "var(--dispatch-script-popup-border) transparent",
+    scrollbarWidth: "thin",
+  },
+  ".cm-tooltip-autocomplete > ul > li": {
+    alignItems: "center",
+    color: "var(--dispatch-script-popup-text)",
+    display: "flex",
+    minHeight: "26px",
+    padding: "3px 9px",
+  },
+  ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
+    backgroundColor: "var(--dispatch-script-popup-selected)",
+    color: "var(--dispatch-script-popup-selected-text)",
+  },
+  ".cm-completionIcon": {
+    color: "var(--dispatch-script-function)",
+    opacity: "0.8",
+  },
+  ".cm-completionLabel": {
+    color: "inherit",
+  },
+  ".cm-completionMatchedText": {
+    color: "var(--dispatch-script-function)",
+    textDecoration: "none",
+  },
+  ".cm-completionDetail": {
+    color: "var(--dispatch-script-popup-muted)",
+    fontStyle: "italic",
+    marginLeft: "10px",
+  },
 });
 
 export const ScriptEditor: React.FC<ScriptEditorProps> = ({ value, onChange, ariaLabel }) => {

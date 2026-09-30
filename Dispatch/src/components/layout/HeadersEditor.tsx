@@ -149,9 +149,9 @@ export const HeadersEditor: React.FC<HeadersEditorProps> = ({ headers = [], onCh
         <table className="w-full text-left border-collapse text-xs table-fixed">
           <thead>
             <tr className="bg-[#222222] border-b border-[#2e2e2e] text-zinc-400 font-semibold select-none text-xs">
-              <th className="w-[30%] border-r border-[#2e2e2e]" style={{ padding: '8px 16px' }}>Key</th>
-              <th className="w-[45%] border-r border-[#2e2e2e]" style={{ padding: '8px 16px' }}>Value</th>
-              <th className="w-[25%] flex items-center justify-between" style={{ padding: '8px 16px' }}>
+              <th className="w-1/3 border-r border-[#2e2e2e]" style={{ padding: '8px 16px' }}>Key</th>
+              <th className="w-1/3 border-r border-[#2e2e2e]" style={{ padding: '8px 16px' }}>Value</th>
+              <th className="w-1/3 flex items-center justify-between" style={{ padding: '8px 16px' }}>
                 <span>Description</span>
               </th>
             </tr>

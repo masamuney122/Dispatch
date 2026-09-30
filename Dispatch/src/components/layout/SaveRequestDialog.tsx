@@ -3,12 +3,14 @@ import type { Collection } from "../../types/collection";
 
 interface SaveRequestDialogProps {
   collections: Collection[];
+  mode: "save" | "saveAs";
   onSave: (collectionId: string, collectionName: string | null) => Promise<void>;
   onClose: () => void;
 }
 
 export const SaveRequestDialog: React.FC<SaveRequestDialogProps> = ({
   collections,
+  mode,
   onSave,
   onClose,
 }) => {
@@ -28,7 +30,9 @@ export const SaveRequestDialog: React.FC<SaveRequestDialogProps> = ({
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
       <form onSubmit={handleSubmit} className="w-full max-w-lg rounded-xl border border-[#414141] bg-[#242424] shadow-2xl" style={{ padding: '32px' }}>
         <div className="flex items-center justify-between" style={{ marginBottom: '24px' }}>
-          <h2 className="text-lg font-bold text-zinc-100">Save Request</h2>
+          <h2 className="text-lg font-bold text-zinc-100">
+            {mode === "saveAs" ? "Save Request As" : "Save Request"}
+          </h2>
           <button type="button" onClick={onClose} className="text-zinc-400 hover:text-white transition-colors">
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>

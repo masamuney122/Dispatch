@@ -5,7 +5,11 @@ import {
   type QuickJSWASMModule,
 } from "quickjs-emscripten";
 import type { ApiRequest } from "../types/request";
-import type { ScriptExecutionInput } from "../types/script";
+import type {
+  ScriptErrorInfo,
+  ScriptExecutionInput,
+  ScriptLogEntry,
+} from "../types/script";
 import { createScriptProgram } from "./scriptRunner.worker";
 
 interface RuntimeOutput {
@@ -16,8 +20,9 @@ interface RuntimeOutput {
     key: string;
     value?: string;
   }>;
-  logs: Array<{ level: string; message: string }>;
+  logs: ScriptLogEntry[];
   tests: Array<{ name: string; passed: boolean; error?: string }>;
+  runtime_error: ScriptErrorInfo | null;
 }
 
 const baseRequest = (): ApiRequest => ({
@@ -80,9 +85,12 @@ describe("Dispatch script runtime", () => {
     expect(result.request.url).toBe(
       "https://example.com/items?existing=two&added=yes#result"
     );
-    expect(result.logs).toEqual([
-      { level: "log", message: "prepared POST" },
-    ]);
+    expect(result.logs).toHaveLength(1);
+    expect(result.logs[0]).toMatchObject({
+      operation: "write",
+      level: "log",
+      message: "prepared POST",
+    });
   });
 
   it("reads variables and records persistent environment mutations", () => {
@@ -140,7 +148,8 @@ describe("Dispatch script runtime", () => {
       passed: false,
     });
     expect(result.tests[2].error).toMatch(/to (contain|include)/);
-    expect(result.logs[0]).toEqual({
+    expect(result.logs[0]).toMatchObject({
+      operation: "write",
       level: "info",
       message: '{"created":true}',
     });
@@ -161,6 +170,40 @@ describe("Dispatch script runtime", () => {
     expect(result.tests).toEqual([
       { name: "runtime is isolated", passed: true },
     ]);
+  });
+
+  it("records console levels, structured values and console.clear in order", () => {
+    const result = evaluate(
+      input(`
+        console.log("before clear");
+        console.clear();
+        console.info({ nested: { ok: true } });
+        console.warn([1, "two"]);
+        console.error("failed", { code: 42 });
+      `),
+    );
+
+    expect(result.logs.map((entry) => entry.operation)).toEqual([
+      "write",
+      "clear",
+      "write",
+      "write",
+      "write",
+    ]);
+    expect(result.logs[2]).toMatchObject({
+      operation: "write",
+      level: "info",
+      values: [{ kind: "object" }],
+    });
+    expect(result.logs[3]).toMatchObject({
+      operation: "write",
+      level: "warn",
+      values: [{ kind: "array" }],
+    });
+    expect(result.logs[4]).toMatchObject({
+      operation: "write",
+      level: "error",
+    });
   });
 
   it("supports Postman-style request headers, URL query and raw body syntax", () => {
@@ -191,7 +234,10 @@ describe("Dispatch script runtime", () => {
     expect(result.request.url).toBe(
       "https://example.com/items?existing=updated&tag=one&tag=two#result"
     );
-    expect(result.logs[0].message).toBe(result.request.url);
+    expect(result.logs[0]).toMatchObject({
+      operation: "write",
+      message: result.request.url,
+    });
   });
 
   it("supports Postman-style response and Chai assertion chains", () => {
@@ -339,12 +385,35 @@ describe("Dispatch script runtime", () => {
     expect(result.environment_mutations).toEqual([]);
   });
 
+  it("exposes collection runner iteration metadata and read-only data", () => {
+    const result = evaluate(
+      input(
+        `
+          pm.test("runner context", () => {
+            pm.expect(pm.info.iteration).to.equal(2);
+            pm.expect(pm.info.iterationCount).to.equal(4);
+            pm.expect(pm.iterationData.get("userId")).to.equal("42");
+            pm.expect(pm.iterationData.has("email")).to.be.true;
+            pm.expect(pm.iterationData.replaceIn("/users/{{userId}}")).to.equal("/users/42");
+            pm.expect(pm.iterationData.toObject()).to.eql({ userId: "42", email: "dispatch@example.com" });
+          });
+        `,
+        {
+          iteration: 2,
+          iteration_count: 4,
+          iteration_data: { userId: "42", email: "dispatch@example.com" },
+        },
+      ),
+    );
+
+    expect(result.tests).toEqual([{ name: "runner context", passed: true }]);
+  });
+
   it("returns clear errors for known unsupported Postman APIs", () => {
     const unsupportedScripts = [
       'pm.sendRequest("https://example.com");',
       'pm.globals.get("token");',
       'pm.collectionVariables.get("token");',
-      'pm.iterationData.get("token");',
       "pm.cookies.jar();",
       "pm.visualizer.set('<h1>test</h1>');",
       "pm.execution.skipRequest();",
@@ -353,28 +422,30 @@ describe("Dispatch script runtime", () => {
     ];
 
     for (const source of unsupportedScripts) {
-      expect(() => evaluate(input(source))).toThrow(
-        /not supported by Dispatch scripts yet/
+      expect(evaluate(input(source)).runtime_error?.message).toMatch(
+        /not supported by Dispatch scripts yet/,
       );
     }
   });
 
   it("rejects environment writes when no environment is active", () => {
-    expect(() =>
-      evaluate(
-        input('pm.environment.set("token", "abc");', {
-          environment: {},
-          hasActiveEnvironment: false,
-        })
-      )
-    ).toThrow(/requires an active environment/);
+    const result = evaluate(
+      input('pm.environment.set("token", "abc");', {
+        environment: {},
+        hasActiveEnvironment: false,
+      }),
+    );
+    expect(result.runtime_error?.message).toMatch(/requires an active environment/);
   });
 
   it("surfaces syntax and runtime errors", () => {
-    expect(() => evaluate(input("const broken = ;"))).toThrow();
-    expect(() => evaluate(input('throw new Error("script exploded");'))).toThrow(
-      /script exploded/
-    );
+    expect(evaluate(input("const broken = ;")).runtime_error).toMatchObject({
+      kind: "syntax",
+    });
+    expect(evaluate(input('throw new Error("script exploded");')).runtime_error).toMatchObject({
+      kind: "runtime",
+      message: "script exploded",
+    });
   });
 
   it("interrupts infinite loops at the execution deadline", () => {
@@ -385,9 +456,9 @@ describe("Dispatch script runtime", () => {
   });
 
   it("rejects async scripts and async tests in the synchronous MVP", () => {
-    expect(() =>
-      evaluate(input("return Promise.resolve('later');"))
-    ).toThrow(/Async scripts are not supported/);
+    expect(
+      evaluate(input("return Promise.resolve('later');")).runtime_error?.message,
+    ).toMatch(/Async scripts are not supported/);
 
     const result = evaluate(
       input(`

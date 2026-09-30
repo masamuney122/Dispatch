@@ -43,6 +43,12 @@ body {
   --dispatch-script-regexp: #f29e74;
   --dispatch-script-punctuation: #c9c6bf;
   --dispatch-script-invalid: #ff6b78;
+  --dispatch-script-popup: #252525;
+  --dispatch-script-popup-border: #454545;
+  --dispatch-script-popup-text: #d8d6d1;
+  --dispatch-script-popup-muted: #929292;
+  --dispatch-script-popup-selected: rgba(255, 108, 55, 0.18);
+  --dispatch-script-popup-selected-text: #ffffff;
 }
 
 .dispatch-script-editor .cm-selectionBackground,
@@ -53,6 +59,77 @@ body {
 .dispatch-script-editor .cm-content ::selection {
   background-color: transparent !important;
   color: inherit !important;
+}
+
+/* CodeMirror mounts autocomplete tooltips outside the editor host. Keep these
+ * rules global so the popup does not fall back to CodeMirror's light defaults. */
+.cm-tooltip.cm-tooltip-autocomplete {
+  overflow: hidden;
+  border: 1px solid #454545 !important;
+  border-radius: 6px;
+  background: #252525 !important;
+  color: #d8d6d1 !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.32);
+}
+
+.cm-tooltip-autocomplete > ul {
+  background: #252525 !important;
+  color: #d8d6d1 !important;
+  scrollbar-color: #555 transparent;
+  scrollbar-width: thin;
+}
+
+.cm-tooltip-autocomplete > ul > li {
+  min-height: 26px;
+  padding: 3px 9px !important;
+  background: transparent !important;
+  color: #d8d6d1 !important;
+}
+
+.cm-tooltip-autocomplete > ul > li[aria-selected] {
+  background: rgba(255, 108, 55, 0.2) !important;
+  color: #fff !important;
+}
+
+.cm-tooltip-autocomplete .cm-completionIcon {
+  color: #5fd7e5 !important;
+  opacity: 0.8;
+}
+
+.cm-tooltip-autocomplete .cm-completionMatchedText {
+  color: #5fd7e5 !important;
+  text-decoration: none !important;
+}
+
+.cm-tooltip-autocomplete .cm-completionDetail {
+  margin-left: 10px;
+  color: #929292 !important;
+}
+
+html[data-theme="light"] .cm-tooltip.cm-tooltip-autocomplete,
+html[data-theme="light"] .cm-tooltip-autocomplete > ul {
+  border-color: #b8cad9 !important;
+  background: #fff !important;
+  color: #243746 !important;
+  scrollbar-color: #b8cad9 transparent;
+}
+
+html[data-theme="light"] .cm-tooltip-autocomplete > ul > li {
+  color: #243746 !important;
+}
+
+html[data-theme="light"] .cm-tooltip-autocomplete > ul > li[aria-selected] {
+  background: rgba(0, 92, 169, 0.12) !important;
+  color: #0b3254 !important;
+}
+
+html[data-theme="light"] .cm-tooltip-autocomplete .cm-completionIcon,
+html[data-theme="light"] .cm-tooltip-autocomplete .cm-completionMatchedText {
+  color: #007c91 !important;
+}
+
+html[data-theme="light"] .cm-tooltip-autocomplete .cm-completionDetail {
+  color: #70869a !important;
 }
 
 html[data-theme="light"] .dispatch-script-editor .cm-gutters {
@@ -74,6 +151,12 @@ html[data-theme="light"] .dispatch-script-editor {
   --dispatch-script-regexp: #a84b20;
   --dispatch-script-punctuation: #526775;
   --dispatch-script-invalid: #c51f3a;
+  --dispatch-script-popup: #ffffff;
+  --dispatch-script-popup-border: #b8cad9;
+  --dispatch-script-popup-text: #243746;
+  --dispatch-script-popup-muted: #70869a;
+  --dispatch-script-popup-selected: rgba(0, 92, 169, 0.12);
+  --dispatch-script-popup-selected-text: #0b3254;
 }
 
 html[data-theme="light"] .dispatch-script-editor .cm-selectionBackground,

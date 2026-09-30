@@ -26,6 +26,10 @@ export function useRequestTabs() {
     activeWorkspaceTab?.kind === "environment"
       ? activeWorkspaceTab.environmentId
       : null;
+  const activeRunnerId =
+    activeWorkspaceTab?.kind === "runner"
+      ? activeWorkspaceTab.runnerId
+      : null;
 
   const updateActiveTab = (updates: Partial<RequestTabState>) => {
     if (!activeTab) return;
@@ -142,6 +146,16 @@ export function useRequestTabs() {
     setActiveTabId(environmentTab.id);
   };
 
+  const openRunnerTab = (runnerId: string) => {
+    const runnerTab: WorkspaceTab = {
+      id: `runner:${runnerId}`,
+      kind: "runner",
+      runnerId,
+    };
+    setWorkspaceTabs((current) => [...current, runnerTab]);
+    setActiveTabId(runnerTab.id);
+  };
+
   const closeEnvironmentTab = (environmentId: string) => {
     const environmentTab = workspaceTabs.find(
       (tab) =>
@@ -194,6 +208,14 @@ export function useRequestTabs() {
       };
     }
 
+    if (workspaceTab.kind === "runner") {
+      return {
+        id: workspaceTab.id,
+        kind: "runner",
+        runnerId: workspaceTab.runnerId,
+      };
+    }
+
     const requestTab = tabs.find(
       (tab) => tab.id === workspaceTab.requestId
     );
@@ -212,6 +234,8 @@ export function useRequestTabs() {
     activeTabId,
     activeTab,
     activeEnvironmentId,
+    activeRunnerId,
+    activeWorkspaceTab,
     tabsInfoList,
     setActiveTabId,
     updateActiveTab,
@@ -219,6 +243,7 @@ export function useRequestTabs() {
     handleAddTab,
     handleCloseTab,
     openEnvironmentTab,
+    openRunnerTab,
     closeEnvironmentTab,
     activateRequestTab,
     handleReorderTab,

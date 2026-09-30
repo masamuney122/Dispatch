@@ -61,7 +61,10 @@ export async function listRecentWorkspaces(): Promise<RecentWorkspace[]> {
   });
 }
 
-export async function chooseWorkspaceDirectory(): Promise<WorkspaceLocation | null> {
+export async function chooseWorkspaceDirectory(
+  _mode: "open" | "create",
+): Promise<WorkspaceLocation | null> {
+  void _mode;
   try {
     const directory = await pickWorkspaceDirectory();
     return { label: directory.name, token: rememberHandle(directory) };

@@ -13,7 +13,6 @@ use dispatch_core::{
     parse_and_validate, parse_openapi as parse_openapi_core,
     prepare_request as prepare_request_core,
     resolve_request_variables as resolve_request_variables_core,
-    serialize_openapi_yaml as serialize_openapi_yaml_core,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -123,13 +122,6 @@ pub fn apply_environment_mutation(
 pub fn parse_openapi(content: &str) -> Result<JsValue, JsValue> {
     let spec = parse_openapi_core(content).map_err(|error| JsValue::from_str(&error))?;
     to_json_compatible_value(&spec)
-}
-
-#[wasm_bindgen]
-pub fn serialize_openapi_yaml(spec: JsValue) -> Result<String, JsValue> {
-    let spec: Value = serde_wasm_bindgen::from_value(spec)
-        .map_err(|error| JsValue::from_str(&format!("OpenAPI verisi okunamadı: {error}")))?;
-    serialize_openapi_yaml_core(&spec).map_err(|error| JsValue::from_str(&error))
 }
 
 #[wasm_bindgen]

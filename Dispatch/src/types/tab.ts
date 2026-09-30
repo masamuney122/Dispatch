@@ -1,12 +1,18 @@
-import type { HttpMethod, RequestSectionTab, BinaryBody, BodyField, RequestBodyType } from "./request";
+import type {
+  HttpMethod,
+  RequestSectionTab,
+  BinaryBody,
+  BodyField,
+  RequestBodyType,
+  RequestQueryParam,
+  ApiRequest,
+} from "./request";
 import type { ApiResponse } from "./response";
 import type { AuthConfig } from "./auth";
 import type { RequestHttpSettings } from "./httpSettings";
 import { EMPTY_REQUEST_SCRIPTS, type RequestScripts, type ScriptExecutionReport } from "./script";
 
-export interface QueryParamItem {
-  key: string;
-  value: string;
+export interface QueryParamItem extends RequestQueryParam {
   enabled?: boolean;
 }
 
@@ -37,6 +43,7 @@ export interface RequestTabState {
   scripts: RequestScripts;
   scriptReports: ScriptExecutionReport[];
   activeSectionTab: RequestSectionTab;
+  lastExecutedRequest: ApiRequest | null;
   response: ApiResponse | null;
   loading: boolean;
   error: string | null;
@@ -57,11 +64,20 @@ export interface EnvironmentWorkspaceTab {
   environmentId: string;
 }
 
+export interface RunnerWorkspaceTab {
+  id: string;
+  kind: "runner";
+  runnerId: string;
+}
+
 /**
  * Lightweight references for the tabs shown in the shared workspace tab bar.
  * Environment data remains in the application-level environment state.
  */
-export type WorkspaceTab = RequestWorkspaceTab | EnvironmentWorkspaceTab;
+export type WorkspaceTab =
+  | RequestWorkspaceTab
+  | EnvironmentWorkspaceTab
+  | RunnerWorkspaceTab;
 
 /** Creates a fresh tab with default values. */
 export const createDefaultTab = (index: number = 1): RequestTabState => ({
@@ -79,6 +95,7 @@ export const createDefaultTab = (index: number = 1): RequestTabState => ({
   scripts: { ...EMPTY_REQUEST_SCRIPTS },
   scriptReports: [],
   activeSectionTab: "Params",
+  lastExecutedRequest: null,
   response: null,
   loading: false,
   error: null,

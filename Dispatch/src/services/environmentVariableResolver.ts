@@ -1,11 +1,5 @@
-import type { ApiRequest } from "../types/request";
-import type { QueryParamItem } from "../types/tab";
+import type { RequestTemplate } from "../types/request";
 import { resolveRequestVariablesCore } from "@platform/requestPreparationService";
-
-interface RequestTemplate {
-  request: ApiRequest;
-  queryParams: QueryParamItem[];
-}
 
 export class VariableResolutionError extends Error {
   readonly variableNames: string[];

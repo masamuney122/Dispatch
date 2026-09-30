@@ -51,6 +51,12 @@ pub enum CollectionMutation {
         collection_id: String,
         folder_id: String,
     },
+    MoveFolder {
+        source_collection_id: String,
+        folder_id: String,
+        target_collection_id: String,
+        target_parent_folder_id: Option<String>,
+    },
     SaveRequest {
         collection_id: String,
         name: String,

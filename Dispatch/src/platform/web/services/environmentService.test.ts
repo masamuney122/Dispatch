@@ -24,7 +24,12 @@ vi.mock("../adapters/indexedDb/preferences", () => ({
   setActiveEnvironment: storeActiveEnvironment,
 }));
 
-import { createEnvironment, deleteEnvironment, setActiveEnvironment } from "./environmentService";
+import {
+  createEnvironment,
+  deleteEnvironment,
+  setActiveEnvironment,
+  updateEnvironment,
+} from "./environmentService";
 
 describe("web environment adapter", () => {
   const workspace = {
@@ -80,5 +85,41 @@ describe("web environment adapter", () => {
     await setActiveEnvironment("environment-1");
     expect(saveEnvironmentsDocument).not.toHaveBeenCalled();
     expect(storeActiveEnvironment).toHaveBeenCalledWith("workspace-1", "environment-1");
+  });
+
+  it("serializes concurrent document mutations", async () => {
+    const environment = { id: "environment-1", name: "Local", variables: {} };
+    applyEnvironmentMutationCore.mockResolvedValue({
+      environments: [environment],
+      active_environment_id: null,
+      environment,
+    });
+
+    let releaseFirstSave!: () => void;
+    let firstSaveStarted!: () => void;
+    const saveStarted = new Promise<void>((resolve) => {
+      firstSaveStarted = resolve;
+    });
+    const firstSave = new Promise<typeof workspace>((resolve) => {
+      releaseFirstSave = () => resolve(workspace);
+    });
+    saveEnvironmentsDocument
+      .mockImplementationOnce(() => {
+        firstSaveStarted();
+        return firstSave;
+      })
+      .mockResolvedValue(workspace);
+
+    const first = updateEnvironment("environment-1", "First", {});
+    await saveStarted;
+    const second = updateEnvironment("environment-1", "Second", {});
+
+    await Promise.resolve();
+    expect(applyEnvironmentMutationCore).toHaveBeenCalledTimes(1);
+
+    releaseFirstSave();
+    await Promise.all([first, second]);
+    expect(applyEnvironmentMutationCore).toHaveBeenCalledTimes(2);
+    expect(saveEnvironmentsDocument).toHaveBeenCalledTimes(2);
   });
 });

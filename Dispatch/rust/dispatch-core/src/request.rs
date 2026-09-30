@@ -40,6 +40,9 @@ pub struct GlobalHttpSettings {
     pub follow_redirects: bool,
     pub remove_referer_on_redirect: bool,
     pub max_redirects: usize,
+    pub request_timeout_ms: u64,
+    pub max_response_size_mb: usize,
+    pub cookies_enabled: bool,
     pub cookie_credentials: CookieCredentials,
 }
 
@@ -51,6 +54,9 @@ impl Default for GlobalHttpSettings {
             follow_redirects: true,
             remove_referer_on_redirect: false,
             max_redirects: 10,
+            request_timeout_ms: 0,
+            max_response_size_mb: 50,
+            cookies_enabled: true,
             cookie_credentials: CookieCredentials::SameOrigin,
         }
     }
@@ -88,6 +94,9 @@ pub fn resolve_http_settings(
             .max_redirects
             .unwrap_or(global.max_redirects)
             .clamp(1, 100),
+        request_timeout_ms: global.request_timeout_ms.min(3_600_000),
+        max_response_size_mb: global.max_response_size_mb.min(1_024),
+        cookies_enabled: global.cookies_enabled,
         cookie_credentials: request
             .cookie_credentials
             .unwrap_or(global.cookie_credentials),
@@ -186,6 +195,9 @@ mod tests {
         let resolved = resolve_http_settings(&GlobalHttpSettings::default(), &request);
         assert!(!resolved.verify_ssl);
         assert_eq!(resolved.max_redirects, 100);
+        assert_eq!(resolved.request_timeout_ms, 0);
+        assert_eq!(resolved.max_response_size_mb, 50);
+        assert!(resolved.cookies_enabled);
         assert_eq!(resolved.cookie_credentials, CookieCredentials::Include);
         assert!(resolved.follow_redirects);
     }

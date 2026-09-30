@@ -4,16 +4,6 @@
  * renders consistent badge/text colors.
  */
 
-export const METHOD_COLORS: Record<string, string> = {
-  GET: "text-emerald-400",
-  POST: "text-amber-400",
-  PUT: "text-sky-400",
-  PATCH: "text-purple-400",
-  DELETE: "text-rose-400",
-  HEAD: "text-cyan-400",
-  OPTIONS: "text-orange-400",
-};
-
 export const METHOD_HEX_COLORS: Record<string, string> = {
   GET: "#78C895",    // Pastel green
   POST: "#EDB458",   // Pastel orange
@@ -24,15 +14,7 @@ export const METHOD_HEX_COLORS: Record<string, string> = {
   OPTIONS: "#DD8B5C",// Pastel brown/orange
 };
 
-const DEFAULT_METHOD_COLOR = "text-zinc-300";
 const DEFAULT_METHOD_HEX = "#c4c4c4";
-
-/**
- * Returns the Tailwind color class for a given HTTP method.
- */
-export function getMethodColorClass(method: string): string {
-  return METHOD_COLORS[method.toUpperCase()] || DEFAULT_METHOD_COLOR;
-}
 
 /**
  * Returns the exact pastel HEX color for a given HTTP method to bypass Tailwind caching.

@@ -99,6 +99,22 @@ pub fn apply_collection_mutation(
             )?)
             .map_err(serialize_error)?,
         ),
+        CollectionMutation::MoveFolder {
+            source_collection_id,
+            folder_id,
+            target_collection_id,
+            target_parent_folder_id,
+        } => Some(
+            to_value(folder::move_between_collections(
+                &mut collections,
+                &source_collection_id,
+                &folder_id,
+                &target_collection_id,
+                target_parent_folder_id,
+                &context.timestamp,
+            )?)
+            .map_err(serialize_error)?,
+        ),
         CollectionMutation::SaveRequest {
             collection_id,
             name,

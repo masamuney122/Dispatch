@@ -33,8 +33,25 @@ pub async fn send_request_with_cookie_jar(
     let start = Instant::now();
     let client = build_client(&prepared.settings, cookie_jar)?;
     let builder = build_request(&client, &prepared.request, &prepared.body)?;
-    let response = builder.send().await.map_err(|error| error.to_string())?;
-    into_api_response(response, start).await
+    let request = builder.build().map_err(|error| error.to_string())?;
+    let request_headers = request
+        .headers()
+        .iter()
+        .map(|(name, value)| {
+            (
+                name.to_string(),
+                value.to_str().unwrap_or("<binary>").to_string(),
+            )
+        })
+        .collect();
+    let response = client
+        .execute(request)
+        .await
+        .map_err(|error| error.to_string())?;
+    let mut response =
+        into_api_response(response, start, prepared.settings.max_response_size_mb).await?;
+    response.request_headers = request_headers;
+    Ok(response)
 }
 
 #[cfg(test)]
@@ -220,6 +237,23 @@ mod tests {
             .expect("return redirect response without following it");
 
         assert_eq!(response.status, 302);
+    }
+
+    #[test]
+    fn rejects_response_over_configured_size_limit() {
+        let url = serve_one_response(
+            b"HTTP/1.1 200 OK\r\nContent-Length: 1048577\r\nConnection: close\r\n\r\n".to_vec(),
+        );
+        let configured = request(url, "GET", RequestBodyType::None);
+        let settings = GlobalHttpSettings {
+            max_response_size_mb: 1,
+            ..Default::default()
+        };
+
+        let error =
+            tauri::async_runtime::block_on(send_request_with_settings(configured, &settings))
+                .expect_err("reject oversized response");
+        assert!(error.contains("configured 1 MB limit"));
     }
 
     #[test]

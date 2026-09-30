@@ -1,4 +1,3 @@
-import { useState, useRef, useCallback, useEffect } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -8,10 +7,10 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
+import { useState } from "react";
 import type { Collection, OrderItem, SavedRequest } from "../../types/collection";
 import type { Environment } from "../../types/environment";
 import type { HistoryItem } from "../../types/history";
-import { MethodBadge } from "../common/MethodBadge";
 import { OverlayScrollArea } from "../common/OverlayScrollArea";
 import { EnvironmentSidebarSection } from "../environment/EnvironmentSidebarSection";
 import {
@@ -19,11 +18,16 @@ import {
 } from "./CollectionTreeNode";
 import { FolderContextMenu } from "./FolderContextMenu";
 import { RequestHistoryPanel } from "./RequestHistoryPanel";
+import { MoveFolderDialog } from "./MoveFolderDialog";
 import {
   buildCollectionTree,
-  type TreeNode,
+  getAllNodeIds,
 } from "../../utils/collectionTree";
-import { useExplorerDragDrop } from "../../hooks/useExplorerDragDrop";
+import { useCollectionExplorer } from "../../hooks/useCollectionExplorer";
+import {
+  DeleteFolderConfirm,
+  DragPreview,
+} from "./ExplorerSidebarPrimitives";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -36,11 +40,14 @@ interface ExplorerSidebarProps {
   onRenameCollection: (id: string, name: string) => Promise<void>;
   onDeleteCollection: (id: string) => Promise<void>;
   onExportCollectionOpenApi: (collection: Collection) => void;
+  onRunCollection: (collection: Collection) => void;
+  onRunFolder: (collection: Collection, folderId: string, folderName: string) => void;
   onSelectSavedRequest: (item: SavedRequest) => void;
   selectedSavedRequestId: string | null;
   history: HistoryItem[];
   onSelectHistory: (item: HistoryItem) => void;
   onClearHistory: () => void;
+  onDeleteHistory: (id: string) => Promise<void>;
   selectedHistoryId: string | null;
   environments: Environment[];
   activeEnvironmentId: string | null;
@@ -53,77 +60,17 @@ interface ExplorerSidebarProps {
   onRenameFolder: (collectionId: string, folderId: string, name: string) => Promise<void>;
   onDeleteFolder: (collectionId: string, folderId: string) => Promise<void>;
   onDuplicateFolder: (collectionId: string, folderId: string) => Promise<void>;
+  onMoveFolder: (
+    sourceCollectionId: string,
+    folderId: string,
+    targetCollectionId: string,
+    targetParentFolderId: string | null,
+  ) => Promise<void>;
   onCreateRequest: (collectionId: string, folderId: string | null) => Promise<SavedRequest>;
   onRenameRequest: (collectionId: string, requestId: string, name: string) => Promise<void>;
   onDuplicateRequest: (collectionId: string, requestId: string) => Promise<void>;
   onDeleteRequest: (collectionId: string, requestId: string) => Promise<void>;
   onReorderItems: (collectionId: string, items: OrderItem[]) => Promise<void>;
-}
-
-// ── Delete confirmation modal ─────────────────────────────────────────────────
-
-const DeleteFolderConfirm: React.FC<{
-  folderName: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-}> = ({ folderName, onConfirm, onCancel }) => (
-  <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-    <div className="w-full max-w-md rounded-xl border border-[#414141] bg-[#242424] shadow-2xl p-7">
-      <h2 className="text-base font-bold text-zinc-100 mb-3">Delete Folder</h2>
-      <p className="text-sm text-zinc-400 mb-6">
-        <span className="text-zinc-200 font-medium">"{folderName}"</span> contains requests or
-        subfolders. All contents will be permanently removed. This cannot be undone.
-      </p>
-      <div className="flex justify-end gap-3">
-        <button
-          onClick={onCancel}
-          className="rounded-lg text-sm font-semibold text-zinc-300 hover:text-white hover:bg-[#2a2a2a] transition-colors px-5 py-2"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={onConfirm}
-          className="rounded-lg bg-red-600 hover:bg-red-500 text-sm font-bold text-white shadow-lg transition-colors px-5 py-2"
-        >
-          Delete All
-        </button>
-      </div>
-    </div>
-  </div>
-);
-
-// ── Drag preview (overlay) ────────────────────────────────────────────────────
-
-const DragPreview: React.FC<{ label: string; isFolder: boolean; method?: string }> = ({
-  label,
-  isFolder,
-  method,
-}) => (
-  <div className="flex items-center gap-2 rounded-md bg-[#2a2a2a] border border-[#444] px-3 py-2 shadow-xl text-xs text-zinc-200 opacity-90 max-w-[220px]">
-    {isFolder ? (
-      <svg className="w-3.5 h-3.5 shrink-0 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 7a2 2 0 012-2h4l2 2h7a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
-      </svg>
-    ) : (
-      method && <MethodBadge method={method} />
-    )}
-    <span className="truncate font-medium">{label}</span>
-  </div>
-);
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function getAllNodeIds(nodes: TreeNode[]): string[] {
-  const ids: string[] = [];
-  for (const node of nodes) {
-    if (node.type === "folder") {
-      ids.push(node.folder.id);
-      ids.push(...getAllNodeIds(node.children));
-    } else {
-      ids.push(node.request.id);
-    }
-  }
-  return ids;
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -137,11 +84,14 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
   onRenameCollection,
   onDeleteCollection,
   onExportCollectionOpenApi,
+  onRunCollection,
+  onRunFolder,
   onSelectSavedRequest,
   selectedSavedRequestId,
   history,
   onSelectHistory,
   onClearHistory,
+  onDeleteHistory,
   selectedHistoryId,
   environments,
   activeEnvironmentId,
@@ -154,53 +104,49 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
   onRenameFolder,
   onDeleteFolder,
   onDuplicateFolder,
+  onMoveFolder,
   onCreateRequest,
   onRenameRequest,
   onDuplicateRequest,
   onDeleteRequest,
   onReorderItems,
 }) => {
-  // ── Expand/collapse state ──────────────────────────────────────────────────
-  const [collectionsHeaderOpen, setCollectionsHeaderOpen] = useState(true);
-  const [openCollectionIds, setOpenCollectionIds] = useState<Record<string, boolean>>({});
-  const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
-  const [openFolderIds, setOpenFolderIds] = useState<Record<string, boolean>>({});
-  const [collectionContextMenu, setCollectionContextMenu] = useState<{
-    collectionId: string;
-    x: number;
-    y: number;
-  } | null>(null);
-
-  // ── Create/rename collection ───────────────────────────────────────────────
-  const [editingCollectionId, setEditingCollectionId] = useState<string | null>(null);
-  const [editingCollectionName, setEditingCollectionName] = useState("");
-
-  // ── Create root folder ─────────────────────────────────────────────────────
-  const [creatingFolderInCollectionId, setCreatingFolderInCollectionId] = useState<string | null>(null);
-  const [newFolderName, setNewFolderName] = useState("");
-  const newRootFolderFormRef = useRef<HTMLFormElement>(null);
-
-  useEffect(() => {
-    if (creatingFolderInCollectionId === null) return;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (newRootFolderFormRef.current?.contains(event.target as Node)) return;
-      setCreatingFolderInCollectionId(null);
-      setNewFolderName("");
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [creatingFolderInCollectionId]);
-
-  // ── Delete confirmation ────────────────────────────────────────────────────
-  const [deleteConfirm, setDeleteConfirm] = useState<{
+  const [moveFolderTarget, setMoveFolderTarget] = useState<{
     collectionId: string;
     folderId: string;
     folderName: string;
   } | null>(null);
-
   const {
+    collectionsHeaderOpen,
+    setCollectionsHeaderOpen,
+    setOpenCollectionIds,
+    selectedCollectionId,
+    setSelectedCollectionId,
+    openFolderIds,
+    collectionContextMenu,
+    setCollectionContextMenu,
+    editingCollectionId,
+    setEditingCollectionId,
+    editingCollectionName,
+    setEditingCollectionName,
+    creatingFolderInCollectionId,
+    setCreatingFolderInCollectionId,
+    newFolderName,
+    setNewFolderName,
+    newRootFolderFormRef,
+    deleteConfirm,
+    setDeleteConfirm,
+    filteredCollections,
+    isCollectionExpanded,
+    toggleCollectionOpen,
+    toggleFolder,
+    handleCreateCollection,
+    startRenamingCollection,
+    finishRenamingCollection,
+    handleCreateRootFolder,
+    handleDeleteFolderRequest,
+    confirmDeleteFolder,
+    handleCreateRequestInFolder,
     sensors,
     sidebarScrollRef,
     draggedNode,
@@ -210,112 +156,17 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
     handleDragOver,
     handleDragEnd,
     clearDragState,
-  } = useExplorerDragDrop({
+  } = useCollectionExplorer({
     collections,
-    openFolderIds,
-    setOpenFolderIds,
+    searchQuery,
+    onCreateCollection,
+    onRenameCollection,
+    onCreateFolder,
+    onDeleteFolder,
+    onCreateRequest,
+    onSelectSavedRequest,
     onReorderItems,
   });
-
-  // ── Helpers ────────────────────────────────────────────────────────────────
-
-  const isCollectionExpanded = (id: string) => openCollectionIds[id] !== false;
-
-  const toggleCollectionOpen = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setOpenCollectionIds((prev) => ({
-      ...prev,
-      [id]: prev[id] === undefined ? false : !prev[id],
-    }));
-  };
-
-  const toggleFolder = useCallback((folderId: string) => {
-    setOpenFolderIds((prev) => ({
-      ...prev,
-      [folderId]: prev[folderId] === undefined ? false : !prev[folderId],
-    }));
-  }, []);
-
-  const effectiveSearch = searchQuery.toLowerCase();
-
-  const filteredCollections = collections.filter(
-    (c) =>
-      !effectiveSearch ||
-      c.name.toLowerCase().includes(effectiveSearch) ||
-      c.requests.some((r) =>
-        [r.name, r.request.url, r.request.method].some((v) =>
-          v.toLowerCase().includes(effectiveSearch)
-        )
-      )
-  );
-
-  // ── Collection create/rename ───────────────────────────────────────────────
-
-  const handleCreateCollection = async () => {
-    await onCreateCollection("New Collection");
-    setCollectionsHeaderOpen(true);
-  };
-
-  const startRenamingCollection = (c: Collection) => {
-    setEditingCollectionId(c.id);
-    setEditingCollectionName(c.name);
-  };
-
-  const finishRenamingCollection = async (collection: Collection) => {
-    if (!editingCollectionName || editingCollectionName.trim() === "") {
-      setEditingCollectionId(null);
-      return;
-    }
-    await onRenameCollection(collection.id, editingCollectionName.trim());
-    setEditingCollectionId(null);
-  };
-
-  // ── Root folder create ─────────────────────────────────────────────────────
-
-  const handleCreateRootFolder = async (e: React.FormEvent, collectionId: string) => {
-    e.preventDefault();
-    const trimmed = newFolderName.trim();
-    if (!trimmed) return;
-    await onCreateFolder(collectionId, trimmed, null);
-    setNewFolderName("");
-    setCreatingFolderInCollectionId(null);
-  };
-
-  // ── Delete folder ─────────────────────────────────────────────────────────
-
-  const handleDeleteFolderRequest = (
-    collectionId: string,
-    folderId: string,
-    hasChildren: boolean
-  ) => {
-    if (hasChildren) {
-      const col = collections.find((c) => c.id === collectionId);
-      const folder = col?.folders.find((f) => f.id === folderId);
-      setDeleteConfirm({
-        collectionId,
-        folderId,
-        folderName: folder?.name ?? "this folder",
-      });
-    } else {
-      void onDeleteFolder(collectionId, folderId);
-    }
-  };
-
-  const confirmDeleteFolder = () => {
-    if (!deleteConfirm) return;
-    void onDeleteFolder(deleteConfirm.collectionId, deleteConfirm.folderId);
-    setDeleteConfirm(null);
-  };
-
-  // ── Create request handler ─────────────────────────────────────────────────
-
-  const handleCreateRequestInFolder = async (
-    collectionId: string,
-    folderId: string | null
-  ) => {
-    const saved = await onCreateRequest(collectionId, folderId);
-    onSelectSavedRequest(saved);
-  };
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -492,6 +343,7 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
                                 setOpenCollectionIds((prev) => ({ ...prev, [collection.id]: true }));
                               }
                             }}
+                            onRun={() => onRunCollection(collection)}
                             onRename={() => startRenamingCollection(collection)}
                             onExportOpenApi={() => onExportCollectionOpenApi(collection)}
                             onDelete={() => void onDeleteCollection(collection.id)}
@@ -561,6 +413,14 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
                                       onRenameFolder={onRenameFolder}
                                       onDeleteFolder={handleDeleteFolderRequest}
                                       onDuplicateFolder={onDuplicateFolder}
+                                      onMoveFolderRequest={(collectionId, folderId, folderName) =>
+                                        setMoveFolderTarget({ collectionId, folderId, folderName })
+                                      }
+                                      onRunFolder={(collectionId, folderId, folderName) => {
+                                        const sourceCollection = collections.find((item) => item.id === collectionId);
+                                        if (sourceCollection) onRunFolder(sourceCollection, folderId, folderName);
+                                      }}
+                                      canMoveFolder={collections.length > 1}
                                       onCreateRequest={handleCreateRequestInFolder}
                                       onRenameRequest={onRenameRequest}
                                       onDuplicateRequest={onDuplicateRequest}
@@ -608,6 +468,7 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
             selectedHistoryId={selectedHistoryId}
             onSelectHistory={onSelectHistory}
             onClearHistory={onClearHistory}
+            onDeleteHistory={onDeleteHistory}
           />
         )}
       </OverlayScrollArea>
@@ -627,6 +488,27 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
           folderName={deleteConfirm.folderName}
           onConfirm={confirmDeleteFolder}
           onCancel={() => setDeleteConfirm(null)}
+        />
+      )}
+
+      {moveFolderTarget && (
+        <MoveFolderDialog
+          collections={collections}
+          sourceCollectionId={moveFolderTarget.collectionId}
+          folderName={moveFolderTarget.folderName}
+          onMove={async (targetCollectionId, targetParentFolderId) => {
+            await onMoveFolder(
+              moveFolderTarget.collectionId,
+              moveFolderTarget.folderId,
+              targetCollectionId,
+              targetParentFolderId,
+            );
+            setOpenCollectionIds((current) => ({
+              ...current,
+              [targetCollectionId]: true,
+            }));
+          }}
+          onClose={() => setMoveFolderTarget(null)}
         />
       )}
 

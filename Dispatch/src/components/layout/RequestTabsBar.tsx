@@ -3,6 +3,7 @@ import type { Environment } from "../../types/environment";
 import { getMethodHexColor } from "../../constants/httpConstants";
 import { EnvironmentSelector } from "../environment/EnvironmentSelector";
 import { OverlayScrollArea } from "../common/OverlayScrollArea";
+import type { CollectionRunnerState } from "../../types/runner";
 
 interface RequestTabInfo {
   id: string;
@@ -19,7 +20,13 @@ interface EnvironmentTabInfo {
   environmentId: string;
 }
 
-export type TabInfo = RequestTabInfo | EnvironmentTabInfo;
+interface RunnerTabInfo {
+  id: string;
+  kind: "runner";
+  runnerId: string;
+}
+
+export type TabInfo = RequestTabInfo | EnvironmentTabInfo | RunnerTabInfo;
 
 interface RequestTabsBarProps {
   tabs: TabInfo[];
@@ -32,6 +39,7 @@ interface RequestTabsBarProps {
     position: "before" | "after"
   ) => void;
   onAddTab: () => void;
+  runners: CollectionRunnerState[];
   environments: Environment[];
   activeEnvironmentId: string | null;
   onSelectEnvironment: (id: string | null) => void;
@@ -46,6 +54,7 @@ export const RequestTabsBar: React.FC<RequestTabsBarProps> = ({
   onCloseTab,
   onReorderTab,
   onAddTab,
+  runners,
   environments,
   activeEnvironmentId,
   onSelectEnvironment,
@@ -213,6 +222,10 @@ export const RequestTabsBar: React.FC<RequestTabsBarProps> = ({
               tab.kind === "environment"
                 ? environments.find((item) => item.id === tab.environmentId)
                 : null;
+            const runner =
+              tab.kind === "runner"
+                ? runners.find((item) => item.id === tab.runnerId)
+                : null;
             return (
               <div
                 key={tab.id}
@@ -254,7 +267,7 @@ export const RequestTabsBar: React.FC<RequestTabsBarProps> = ({
                     />
                   )}
                 </>
-              ) : (
+              ) : tab.kind === "environment" ? (
                 <>
                   <svg
                     className="h-3.5 w-3.5 shrink-0 text-emerald-400"
@@ -273,8 +286,35 @@ export const RequestTabsBar: React.FC<RequestTabsBarProps> = ({
                     {environment?.name || "Environment"}
                   </span>
                 </>
+              ) : (
+                <>
+                  <svg
+                    className="h-3.5 w-3.5 shrink-0 text-[#ff7a45]"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={1.7}
+                  >
+                    <circle cx="12" cy="12" r="9" />
+                    <path
+                      d="m10 8.75 5.5 3.25L10 15.25v-6.5Z"
+                      fill="currentColor"
+                      stroke="none"
+                    />
+                  </svg>
+                  <span className="min-w-0 flex-1 truncate text-xs">
+                    {runner
+                      ? runner.scope.type === "folder"
+                        ? runner.scope.folderName
+                        : runner.collectionName
+                      : "Collection Runner"}
+                  </span>
+                  {runner?.status === "running" && (
+                    <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-sky-400" />
+                  )}
+                </>
               )}
-              {(tabs.length > 1 || tab.kind === "environment") && (
+              {(tabs.length > 1 || tab.kind !== "request") && (
                 <button
                   draggable={false}
                   onClick={(e) => {

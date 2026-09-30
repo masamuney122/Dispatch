@@ -40,6 +40,16 @@ export interface ApiRequest {
   scripts?: RequestScripts;
 }
 
+export interface RequestQueryParam {
+  key: string;
+  value: string;
+}
+
+export interface RequestTemplate {
+  request: ApiRequest;
+  queryParams: RequestQueryParam[];
+}
+
 export type PreparedBody =
   | { kind: "none" }
   | { kind: "text"; value: string }

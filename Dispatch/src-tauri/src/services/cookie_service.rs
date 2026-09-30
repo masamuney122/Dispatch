@@ -27,6 +27,14 @@ pub struct ManagedCookieJar {
 }
 
 impl ManagedCookieJar {
+    pub fn from_cookies(cookies: &[StoredCookie]) -> Result<Self, String> {
+        let jar = Self::default();
+        for cookie in cookies {
+            jar.upsert(None, cookie.clone())?;
+        }
+        Ok(jar)
+    }
+
     pub fn load(path: &Path) -> Result<Self, String> {
         if !path.exists() {
             return Ok(Self::default());
@@ -304,6 +312,32 @@ mod tests {
             host_only: true,
             enabled: true,
         }
+    }
+
+    #[test]
+    fn creates_an_isolated_runner_cookie_jar_from_a_snapshot() {
+        let workspace_jar = ManagedCookieJar::default();
+        let cookie = sample_cookie();
+        workspace_jar
+            .upsert(None, cookie.clone())
+            .expect("insert workspace cookie");
+
+        let runner_jar =
+            ManagedCookieJar::from_cookies(&workspace_jar.list().unwrap()).expect("clone jar");
+        capture(
+            &runner_jar,
+            "https://example.com/api/login",
+            &["session=runner; Path=/api; Secure"],
+        );
+
+        assert_eq!(
+            request_cookie(&workspace_jar, "https://example.com/api/users").as_deref(),
+            Some("session=abc123")
+        );
+        assert_eq!(
+            request_cookie(&runner_jar, "https://example.com/api/users").as_deref(),
+            Some("session=runner")
+        );
     }
 
     #[test]

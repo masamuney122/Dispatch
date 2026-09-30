@@ -8,6 +8,7 @@ interface BrowserApiResponse {
   bytes: Uint8Array;
   contentType: string | null;
   headers: Record<string, string>;
+  requestHeaders: Record<string, string>;
 }
 
 function requestBody(body: PreparedRequest["body"]): BodyInit | undefined {
@@ -25,6 +26,61 @@ function requestBody(body: PreparedRequest["body"]): BodyInit | undefined {
   return undefined;
 }
 
+function maximumResponseBytes(megabytes: number): number {
+  return megabytes <= 0 ? 0 : megabytes * 1024 * 1024;
+}
+
+async function readResponseBytes(
+  response: Response,
+  maxResponseSizeMb: number,
+): Promise<Uint8Array> {
+  const limit = maximumResponseBytes(maxResponseSizeMb);
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (limit > 0 && Number.isFinite(declaredLength) && declaredLength > limit) {
+    throw new Error(
+      `Response exceeds the configured ${maxResponseSizeMb} MB limit.`,
+    );
+  }
+
+  if (!response.body) {
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (limit > 0 && bytes.byteLength > limit) {
+      throw new Error(
+        `Response exceeds the configured ${maxResponseSizeMb} MB limit.`,
+      );
+    }
+    return bytes;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (limit > 0 && size > limit) {
+        await reader.cancel();
+        throw new Error(
+          `Response exceeds the configured ${maxResponseSizeMb} MB limit.`,
+        );
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
 export async function sendBrowserRequest(
   prepared: PreparedRequest,
   signal?: AbortSignal,
@@ -34,18 +90,34 @@ export async function sendBrowserRequest(
   const headers = new Headers(request.headers);
   const body = requestBody(prepared.body);
   const startedAt = performance.now();
+  const timeoutController = new AbortController();
+  const timeoutId =
+    settings.request_timeout_ms > 0
+      ? globalThis.setTimeout(
+          () => timeoutController.abort("timeout"),
+          settings.request_timeout_ms,
+        )
+      : undefined;
+  const abortFromCaller = () => timeoutController.abort(signal?.reason);
+  if (signal?.aborted) abortFromCaller();
+  else signal?.addEventListener("abort", abortFromCaller, { once: true });
   try {
     const response = await fetch(request.url, {
       method: request.method,
       headers,
       body,
-      signal,
-      credentials: settings.cookie_credentials,
+      signal: timeoutController.signal,
+      credentials: settings.cookies_enabled
+        ? settings.cookie_credentials
+        : "omit",
       redirect: settings.follow_redirects ? "follow" : "error",
       referrerPolicy: settings.remove_referer_on_redirect ? "no-referrer" : undefined,
     });
     const contentType = response.headers.get("content-type");
-    const bytes = new Uint8Array(await response.arrayBuffer());
+    const bytes = await readResponseBytes(
+      response,
+      settings.max_response_size_mb,
+    );
     return {
       status: response.status,
       statusText: response.statusText,
@@ -54,12 +126,28 @@ export async function sendBrowserRequest(
       bytes,
       contentType,
       headers: Object.fromEntries(response.headers.entries()),
+      requestHeaders: Object.fromEntries(headers.entries()),
     };
   } catch (error) {
+    if (
+      timeoutController.signal.aborted &&
+      timeoutController.signal.reason === "timeout"
+    ) {
+      throw new Error(
+        `Request timed out after ${settings.request_timeout_ms} ms.`,
+        { cause: error },
+      );
+    }
     if (error instanceof DOMException && error.name === "AbortError") throw error;
+    if (error instanceof Error && error.message.startsWith("Response exceeds")) {
+      throw error;
+    }
     throw new Error(
       "Request tarayıcı tarafından gönderilemedi. Endpoint CORS izni vermiyor, ağ erişilemiyor veya URL geçersiz olabilir.",
       { cause: error },
     );
+  } finally {
+    if (timeoutId !== undefined) globalThis.clearTimeout(timeoutId);
+    signal?.removeEventListener("abort", abortFromCaller);
   }
 }

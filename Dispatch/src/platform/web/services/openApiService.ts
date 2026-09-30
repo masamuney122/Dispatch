@@ -3,6 +3,7 @@ import type { Collection } from "../../../types/collection";
 import type { Environment } from "../../../types/environment";
 import type {
   OpenApiExportOptions,
+  OpenApiExportResult,
   OpenApiImportOptions,
   OpenApiImportPreview,
   OpenApiImportResult,
@@ -19,7 +20,7 @@ import { getActiveWorkspace, updateActiveWorkspace } from "./workspaceRuntime";
 
 type JsonObject = Record<string, unknown>;
 
-interface WebOpenApiExportResult {
+interface WebOpenApiExportResult extends OpenApiExportResult {
   content: string;
   mime_type: string;
   extension: "json" | "yaml";

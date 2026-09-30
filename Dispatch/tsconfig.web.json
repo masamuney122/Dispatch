@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "paths": {
+      "@platform/*": ["./src/platform/web/services/*"]
+    }
+  }
+}

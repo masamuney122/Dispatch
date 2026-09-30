@@ -14,16 +14,54 @@ export const EMPTY_REQUEST_SCRIPTS: RequestScripts = {
 export type ScriptPhase = "pre-request" | "post-response";
 export type ScriptLogLevel = "log" | "info" | "warn" | "error";
 export type ScriptExecutionStatus = "passed" | "failed" | "skipped";
+export type ScriptErrorKind =
+  | "syntax"
+  | "runtime"
+  | "timeout"
+  | "worker"
+  | "memory"
+  | "unknown";
 
-export interface ScriptLogEntry {
+export type ScriptConsoleValue =
+  | { kind: "null" }
+  | { kind: "undefined" }
+  | { kind: "boolean"; value: boolean }
+  | { kind: "number"; value: number | string }
+  | { kind: "string"; value: string; truncated?: boolean }
+  | { kind: "array"; items: ScriptConsoleValue[]; truncated: boolean }
+  | {
+      kind: "object";
+      entries: Array<{ key: string; value: ScriptConsoleValue }>;
+      truncated: boolean;
+    }
+  | { kind: "special"; label: string };
+
+export interface ScriptConsoleWriteEntry {
+  operation: "write";
   level: ScriptLogLevel;
   message: string;
+  values: ScriptConsoleValue[];
+  sequence: number;
 }
+
+export interface ScriptConsoleClearEntry {
+  operation: "clear";
+  sequence: number;
+}
+
+export type ScriptLogEntry = ScriptConsoleWriteEntry | ScriptConsoleClearEntry;
 
 export interface ScriptTestResult {
   name: string;
   passed: boolean;
+  status?: "passed" | "failed" | "skipped";
   error?: string;
+}
+
+export interface ScriptErrorInfo {
+  kind: ScriptErrorKind;
+  message: string;
+  stack?: string;
 }
 
 export interface ScriptExecutionReport {
@@ -33,6 +71,7 @@ export interface ScriptExecutionReport {
   logs: ScriptLogEntry[];
   tests: ScriptTestResult[];
   error?: string;
+  error_info?: ScriptErrorInfo;
 }
 
 export interface ScriptEnvironmentMutation {
@@ -48,6 +87,9 @@ export interface ScriptExecutionInput {
   response?: ApiResponse;
   environment: Record<string, string>;
   hasActiveEnvironment: boolean;
+  iteration?: number;
+  iteration_count?: number;
+  iteration_data?: Record<string, string>;
 }
 
 export interface ScriptExecutionResult {
@@ -56,4 +98,3 @@ export interface ScriptExecutionResult {
   environment_mutations: ScriptEnvironmentMutation[];
   report: ScriptExecutionReport;
 }
-

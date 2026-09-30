@@ -25,6 +25,7 @@ Arayüz, veri modelleri ve uygulama akışı ortaktır. HTTP, dosya sistemi, coo
 - [Environment değişkenleri](#environment-değişkenleri)
 - [Cookie yönetimi](#cookie-yönetimi)
 - [Pre-request ve post-response scriptleri](#pre-request-ve-post-response-scriptleri)
+- [Collection Runner](#collection-runner)
 - [Workspace veri formatı](#workspace-veri-formatı)
 - [OpenAPI ve `.dispatch` arşivleri](#openapi-ve-dispatch-arşivleri)
 - [TestBackend ile manuel test](#testbackend-ile-manuel-test)
@@ -48,6 +49,7 @@ Arayüz, veri modelleri ve uygulama akışı ortaktır. HTTP, dosya sistemi, coo
 - Pre-request ve post-response JavaScript scriptleri
 - Postman uyumlu `pm.*` API alt kümesi ve Dispatch `dp.*` alias'ı
 - Script test sonuçları ve console kayıtları
+- Functional ve performance modlu Collection Runner
 - OpenAPI 3 JSON/YAML import ve collection export
 - Masaüstünde `.dispatch` backup ve Safe Share arşivleri
 - Dark ve light tema
@@ -204,6 +206,9 @@ VITE_BASE_PATH=/dispatch/ npm run build:web
 7. `Send` ile request'i çalıştır.
 8. Body, Cookies, Headers, Tests ve Console response sekmelerini incele.
 9. Request'i collection'a kaydet.
+
+Bir collection'ın üç nokta menüsündeki `Run collection` seçeneği, seçilen
+request'leri toplu çalıştırmak için ayrı bir runner sekmesi açar.
 
 Kaydedilmiş request açıldığında collection ve iç içe folder zinciri request panelinin üst kısmında breadcrumb olarak gösterilir.
 
@@ -389,6 +394,7 @@ console.info("Response time", pm.response.responseTime, "ms");
 | `pm.variables` | `get`, `has`, `set`, `unset`, `replaceIn` |
 | `pm.environment` | `get`, `set`, `unset` |
 | `pm.info` | `eventName`, `iteration`, `iterationCount` |
+| `pm.iterationData` | `get`, `has`, `replaceIn`, `toObject` |
 | Test | `pm.test`, `pm.expect`, `pm.response.to.have.status(...)` |
 | Console | `log`, `info`, `warn`, `error` |
 
@@ -401,7 +407,6 @@ Desteklenen assertion'lar arasında `equal`, `eql`, `include`, `contain`, `prope
 - `pm.sendRequest`
 - `pm.globals`
 - `pm.collectionVariables`
-- `pm.iterationData`
 - `pm.cookies.jar`
 - `pm.visualizer`
 - `pm.execution.skipRequest`
@@ -409,6 +414,40 @@ Desteklenen assertion'lar arasında `equal`, `eql`, `include`, `contain`, `prope
 - Async script ve async `pm.test`
 
 Bu API'ler sessizce yok sayılmaz; açıklayıcı bir runtime hatası üretir. Cookie işlemleri için Dispatch Cookie Manager kullanılmalıdır.
+
+## Collection Runner
+
+Collection Runner, collection içindeki request'leri folder sırasını da koruyan
+depth-first bir sıra ile çalıştırır. Runner sekmesi açıldıktan sonra request'ler
+seçilebilir ve sürüklenerek o çalıştırmaya özel yeniden sıralanabilir.
+
+### Functional run
+
+- Ayarlanabilir iteration sayısı ve request'ler arası gecikme
+- JSON veya CSV iteration data; scriptlerde `pm.iterationData`, request
+  alanlarında aynı anahtarlar `{{variable}}` olarak kullanılabilir
+- Pre-request ve post-response scriptlerinin normal Send akışıyla aynı pipeline'da çalışması
+- Test, error, skipped ve console-log sonuç filtreleri
+- İsteğe bağlı response saklama ve environment değişikliklerini run sonunda kaydetme
+- Bir request veya script hatasında çalıştırmayı durdurma
+
+### Performance run
+
+- Sabit veya ramp-up yük profili
+- Süre ve virtual-user sayısı
+- Ortalama, min/max, P50, P95, P99 ve request/s metrikleri
+- Her virtual user için birbirinden ayrılmış runtime environment ve cookie oturumu
+
+Masaüstünde runner cookie jar'ı workspace jar'ının izole bir snapshot'ı olarak
+başlar. `Save cookies after collection run` açıksa functional run sonunda oluşan
+cookie durumu workspace'e aktarılır. Performance run'larında paralel virtual-user
+jar'ları workspace'e birleştirilmez. Web'de cookie'ler tarayıcı tarafından
+yönetildiği için cookie durumunu geri alma veya sonradan birleştirme mümkün değildir.
+
+Runner sonucu ve response saklama durumu yalnızca açık uygulama oturumu boyunca
+yaşar; kalıcı geçmiş henüz tutulmaz. O anda devam eden HTTP request'i zorla
+kesilmez, fakat `Stop run` sonrasında yeni request planlanmaz. Postman'ın
+`pm.execution.setNextRequest` ve `skipRequest` akış kontrolü henüz desteklenmez.
 
 ## Workspace veri formatı
 
@@ -535,6 +574,7 @@ Workspace içindeki `Web HTTP Testleri (httpbin) → 10 - Scripts` klasörü scr
 | `npm run preview:desktop` | `dist/desktop` için Vite preview |
 | `npm run lint` | ESLint |
 | `npm run test:scripts` | QuickJS script runtime Vitest paketi |
+| `npm run test:runner` | Collection Runner ve script iteration testleri |
 | `npm run test:rust` | Ortak Rust workspace ve Tauri Rust testleri |
 | `npm run check` | Lint + script testleri + Rust testleri + iki frontend build |
 
@@ -571,6 +611,7 @@ Dispatch/
 │   │   ├── environment/        Environment UI
 │   │   ├── layout/             Request/response ana arayüzü
 │   │   ├── openapi/            OpenAPI dialog'ları
+│   │   ├── runner/             Collection Runner ayar ve sonuç ekranları
 │   │   ├── scripts/            CodeMirror script editörü
 │   │   ├── settings/           Global/request HTTP ayarları
 │   │   └── workspace/          Workspace Launcher

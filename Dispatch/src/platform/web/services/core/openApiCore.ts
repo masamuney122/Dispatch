@@ -3,7 +3,6 @@ import {
   import_openapi,
   inspect_openapi,
   parse_openapi,
-  serialize_openapi_yaml,
 } from "../../wasm/dispatch_web_wasm";
 import type { Collection } from "../../../../types/collection";
 import type {
@@ -42,15 +41,6 @@ export async function parseOpenApi(content: string): Promise<Record<string, unkn
     return parse_openapi(content) as Record<string, unknown>;
   } catch (error) {
     throw wasmError(error, "OpenAPI belgesi doğrulanamadı");
-  }
-}
-
-export async function serializeOpenApiYaml(spec: Record<string, unknown>): Promise<string> {
-  await ensureWasmInitialized();
-  try {
-    return serialize_openapi_yaml(spec);
-  } catch (error) {
-    throw wasmError(error, "OpenAPI YAML oluşturulamadı");
   }
 }
 

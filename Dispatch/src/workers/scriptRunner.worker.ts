@@ -1,7 +1,11 @@
 /// <reference lib="webworker" />
 
 import { getQuickJS, shouldInterruptAfterDeadline } from "quickjs-emscripten";
-import type { ScriptExecutionInput, ScriptExecutionResult } from "../types/script";
+import type {
+  ScriptErrorKind,
+  ScriptExecutionInput,
+  ScriptExecutionResult,
+} from "../types/script";
 
 const MEMORY_LIMIT_BYTES = 16 * 1024 * 1024;
 const STACK_LIMIT_BYTES = 512 * 1024;
@@ -16,6 +20,7 @@ interface ScriptWorkerResponse {
   id: string;
   result?: ScriptExecutionResult;
   error?: string;
+  errorKind?: ScriptErrorKind;
 }
 
 const errorMessage = (error: unknown) => {
@@ -40,6 +45,7 @@ export const createScriptProgram = (input: ScriptExecutionInput) => {
   const __input = JSON.parse(${serializedInput});
   const __request = JSON.parse(JSON.stringify(__input.request));
   const __environment = JSON.parse(JSON.stringify(__input.environment || {}));
+  const __iterationDataValues = JSON.parse(JSON.stringify(__input.iteration_data || {}));
   const __mutations = [];
   const __logs = [];
   const __tests = [];
@@ -60,6 +66,64 @@ export const createScriptProgram = (input: ScriptExecutionInput) => {
     }
   };
   const __message = (values) => values.map(__stringify).join(" ");
+  const __MAX_DEPTH = 5;
+  const __MAX_ITEMS = 100;
+  const __MAX_STRING = 10000;
+  const __serialize = (value, depth = 0, seen = []) => {
+    if (value === null) return { kind: "null" };
+    if (typeof value === "undefined") return { kind: "undefined" };
+    if (typeof value === "boolean") return { kind: "boolean", value };
+    if (typeof value === "number") {
+      return { kind: "number", value: Number.isFinite(value) ? value : String(value) };
+    }
+    if (typeof value === "bigint") return { kind: "special", label: String(value) + "n" };
+    if (typeof value === "symbol") return { kind: "special", label: String(value) };
+    if (typeof value === "function") return { kind: "special", label: "[Function " + (value.name || "anonymous") + "]" };
+    if (typeof value === "string") {
+      return value.length > __MAX_STRING
+        ? { kind: "string", value: value.slice(0, __MAX_STRING), truncated: true }
+        : { kind: "string", value };
+    }
+    if (depth >= __MAX_DEPTH) return { kind: "special", label: "[Max depth]" };
+    if (seen.includes(value)) return { kind: "special", label: "[Circular]" };
+    const nextSeen = seen.concat([value]);
+    if (Array.isArray(value)) {
+      return {
+        kind: "array",
+        items: value.slice(0, __MAX_ITEMS).map((item) => __serialize(item, depth + 1, nextSeen)),
+        truncated: value.length > __MAX_ITEMS
+      };
+    }
+    if (value instanceof Error) {
+      return {
+        kind: "object",
+        entries: [
+          { key: "name", value: __serialize(value.name, depth + 1, nextSeen) },
+          { key: "message", value: __serialize(value.message, depth + 1, nextSeen) },
+          { key: "stack", value: __serialize(value.stack, depth + 1, nextSeen) }
+        ],
+        truncated: false
+      };
+    }
+    const keys = Object.keys(value);
+    return {
+      kind: "object",
+      entries: keys.slice(0, __MAX_ITEMS).map((key) => {
+        try { return { key, value: __serialize(value[key], depth + 1, nextSeen) }; }
+        catch (error) { return { key, value: { kind: "special", label: "[Thrown: " + __stringify(error) + "]" } }; }
+      }),
+      truncated: keys.length > __MAX_ITEMS
+    };
+  };
+  const __writeLog = (level, values) => {
+    __logs.push({
+      operation: "write",
+      level,
+      message: __message(values),
+      values: values.map((value) => __serialize(value)),
+      sequence: __logs.length
+    });
+  };
   const __normalizeHeader = (name) => String(name).trim().toLowerCase();
   const __headerKey = (name) => Object.keys(__request.headers || {}).find(
     (key) => key.toLowerCase() === __normalizeHeader(name)
@@ -447,12 +511,25 @@ export const createScriptProgram = (input: ScriptExecutionInput) => {
       __mutations.push({ operation: "unset", key });
     }
   });
+  const __iterationData = Object.freeze({
+    get(name) { return __iterationDataValues[String(name)]; },
+    has(name) { return Object.prototype.hasOwnProperty.call(__iterationDataValues, String(name)); },
+    replaceIn(value) {
+      return String(value).replace(/\\{\\{\\s*([^{}]+?)\\s*\\}\\}/g, (match, name) =>
+        Object.prototype.hasOwnProperty.call(__iterationDataValues, name)
+          ? __iterationDataValues[name]
+          : match
+      );
+    },
+    toObject() { return JSON.parse(JSON.stringify(__iterationDataValues)); }
+  });
 
   globalThis.console = Object.freeze({
-    log(...values) { __logs.push({ level: "log", message: __message(values) }); },
-    info(...values) { __logs.push({ level: "info", message: __message(values) }); },
-    warn(...values) { __logs.push({ level: "warn", message: __message(values) }); },
-    error(...values) { __logs.push({ level: "error", message: __message(values) }); }
+    log(...values) { __writeLog("log", values); },
+    info(...values) { __writeLog("info", values); },
+    warn(...values) { __writeLog("warn", values); },
+    error(...values) { __writeLog("error", values); },
+    clear() { __logs.push({ operation: "clear", sequence: __logs.length }); }
   });
 
   const __unsupported = (feature, guidance) => {
@@ -472,12 +549,12 @@ export const createScriptProgram = (input: ScriptExecutionInput) => {
     environment: __environmentApi,
     info: Object.freeze({
       eventName: __input.phase === "pre-request" ? "prerequest" : "test",
-      iteration: 0,
-      iterationCount: 1
+      iteration: Number.isInteger(__input.iteration) ? __input.iteration : 0,
+      iterationCount: Number.isInteger(__input.iteration_count) ? __input.iteration_count : 1
     }),
     globals: __unsupportedScope("pm/dp.globals"),
     collectionVariables: __unsupportedScope("pm/dp.collectionVariables"),
-    iterationData: __unsupportedScope("pm/dp.iterationData"),
+    iterationData: __iterationData,
     cookies: Object.freeze({
       jar() { return __unsupported("pm/dp.cookies.jar", "Use Dispatch's workspace Cookie Manager instead."); }
     }),
@@ -509,10 +586,19 @@ export const createScriptProgram = (input: ScriptExecutionInput) => {
   globalThis.dp = __scriptApi;
   globalThis.pm = __scriptApi;
 
-  const __runner = Function(__input.source);
-  const __returnValue = __runner.call(undefined);
-  if (__returnValue && typeof __returnValue.then === "function") {
-    throw new Error("Async scripts are not supported yet");
+  let __runtimeError = null;
+  try {
+    const __runner = Function(__input.source);
+    const __returnValue = __runner.call(undefined);
+    if (__returnValue && typeof __returnValue.then === "function") {
+      throw new Error("Async scripts are not supported yet");
+    }
+  } catch (error) {
+    __runtimeError = {
+      kind: error && error.name === "SyntaxError" ? "syntax" : "runtime",
+      message: error && error.message ? String(error.message) : __stringify(error),
+      stack: error && error.stack ? String(error.stack) : undefined
+    };
   }
 
   return {
@@ -520,7 +606,8 @@ export const createScriptProgram = (input: ScriptExecutionInput) => {
     environment: __environment,
     environment_mutations: __mutations,
     logs: __logs,
-    tests: __tests
+    tests: __tests,
+    runtime_error: __runtimeError
   };
 })()
 `;
@@ -539,6 +626,7 @@ const handleWorkerMessage = async (event: MessageEvent<ScriptWorkerRequest>) => 
     }) as Omit<ScriptExecutionResult, "report"> & {
       logs: ScriptExecutionResult["report"]["logs"];
       tests: ScriptExecutionResult["report"]["tests"];
+      runtime_error?: ScriptExecutionResult["report"]["error_info"] | null;
     };
     const duration = Math.max(0, Math.round((performance.now() - startedAt) * 10) / 10);
     const result: ScriptExecutionResult = {
@@ -547,15 +635,24 @@ const handleWorkerMessage = async (event: MessageEvent<ScriptWorkerRequest>) => 
       environment_mutations: value.environment_mutations,
       report: {
         phase: input.phase,
-        status: "passed",
+        status: value.runtime_error ? "failed" : "passed",
         duration_ms: duration,
         logs: value.logs,
         tests: value.tests,
+        error: value.runtime_error?.message,
+        error_info: value.runtime_error || undefined,
       },
     };
     self.postMessage({ id, result } satisfies ScriptWorkerResponse);
   } catch (error) {
-    self.postMessage({ id, error: errorMessage(error) } satisfies ScriptWorkerResponse);
+    const message = errorMessage(error);
+    const normalized = message.toLowerCase();
+    const errorKind: ScriptErrorKind = normalized.includes("interrupted")
+      ? "timeout"
+      : normalized.includes("memory")
+        ? "memory"
+        : "worker";
+    self.postMessage({ id, error: message, errorKind } satisfies ScriptWorkerResponse);
   }
 };
 

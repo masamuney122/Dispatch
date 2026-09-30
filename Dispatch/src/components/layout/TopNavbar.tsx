@@ -7,7 +7,7 @@ import type { ArchiveMode } from "../../types/workspace";
 interface TopNavbarProps {
   workspaceName: string;
   onChangeWorkspace: () => Promise<void>;
-  onImportOpenApi: () => Promise<void>;
+  onImportOpenApi: () => void | Promise<void>;
   onExportWorkspace: (mode: ArchiveMode) => Promise<void>;
   searchQuery: string;
   onSearchChange: (query: string) => void;
@@ -58,7 +58,11 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
         {workspaceMenuOpen && (
           <div className="absolute left-2 top-[28px] z-50 w-52 rounded-lg border border-[#444] bg-[#292929] p-1.5 shadow-xl">
             <button
-              onClick={() => void onImportOpenApi().finally(() => setWorkspaceMenuOpen(false))}
+              onClick={() =>
+                void Promise.resolve(onImportOpenApi()).finally(() =>
+                  setWorkspaceMenuOpen(false),
+                )
+              }
               className="w-full rounded px-3 py-2 text-left text-xs text-zinc-300 hover:bg-[#383838]"
             >
               OpenAPI içe aktar

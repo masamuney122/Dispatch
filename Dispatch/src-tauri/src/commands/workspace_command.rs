@@ -111,6 +111,8 @@ pub fn update_http_settings(
     mut settings: GlobalHttpSettings,
 ) -> Result<GlobalHttpSettings, String> {
     settings.max_redirects = settings.max_redirects.clamp(1, 100);
+    settings.request_timeout_ms = settings.request_timeout_ms.min(3_600_000);
+    settings.max_response_size_mb = settings.max_response_size_mb.min(1_024);
     let app_data_dir = app_handle
         .path()
         .app_data_dir()

@@ -176,6 +176,26 @@ pub fn duplicate_folder(
 }
 
 #[tauri::command]
+pub fn move_folder(
+    runtime: tauri::State<'_, Mutex<WorkspaceRuntimeState>>,
+    source_collection_id: String,
+    folder_id: String,
+    target_collection_id: String,
+    target_parent_folder_id: Option<String>,
+) -> Result<Folder, String> {
+    entity(execute(
+        runtime.inner(),
+        CollectionMutation::MoveFolder {
+            source_collection_id,
+            folder_id,
+            target_collection_id,
+            target_parent_folder_id,
+        },
+        false,
+    )?)
+}
+
+#[tauri::command]
 pub fn create_request_in_collection(
     runtime: tauri::State<'_, Mutex<WorkspaceRuntimeState>>,
     collection_id: String,

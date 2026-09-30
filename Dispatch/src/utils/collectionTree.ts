@@ -15,6 +15,19 @@ export interface RequestTreeNode {
 
 export type TreeNode = FolderTreeNode | RequestTreeNode;
 
+export function getAllNodeIds(nodes: TreeNode[]): string[] {
+  const ids: string[] = [];
+  for (const node of nodes) {
+    if (node.type === "folder") {
+      ids.push(node.folder.id);
+      ids.push(...getAllNodeIds(node.children));
+    } else {
+      ids.push(node.request.id);
+    }
+  }
+  return ids;
+}
+
 // ── Pure Builder Functions ────────────────────────────────────────────────────
 
 /**
@@ -107,53 +120,6 @@ export function getDescendantFolderIds(
     result.push(...getDescendantFolderIds(allFolders, child.id));
   }
   return result;
-}
-
-/**
- * Counts all requests in a subtree (including nested folders).
- */
-export function countRequestsInTree(nodes: TreeNode[]): number {
-  let count = 0;
-  for (const node of nodes) {
-    if (node.type === "request") {
-      count += 1;
-    } else {
-      count += countRequestsInTree(node.children);
-    }
-  }
-  return count;
-}
-
-/**
- * Checks whether a folder has any children (folders or requests).
- */
-export function folderHasChildren(
-  collection: Collection,
-  folderId: string
-): boolean {
-  const hasChildFolders = (collection.folders ?? []).some(
-    (f) => f.parent_folder_id === folderId
-  );
-  const hasChildRequests = collection.requests.some(
-    (r) => r.folder_id === folderId
-  );
-  return hasChildFolders || hasChildRequests;
-}
-
-/**
- * Returns a human-readable path for a folder, e.g. "Root / Parent / Child".
- */
-export function getFolderPath(allFolders: Folder[], folderId: string): string {
-  const parts: string[] = [];
-  let current: Folder | undefined = allFolders.find((f) => f.id === folderId);
-  while (current) {
-    parts.unshift(current.name);
-    const parentId = current.parent_folder_id ?? null;
-    current = parentId
-      ? allFolders.find((f) => f.id === parentId)
-      : undefined;
-  }
-  return parts.join(" / ");
 }
 
 /**

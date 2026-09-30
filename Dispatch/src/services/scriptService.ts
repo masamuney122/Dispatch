@@ -1,4 +1,5 @@
 import type {
+  ScriptErrorKind,
   ScriptExecutionInput,
   ScriptExecutionReport,
   ScriptExecutionResult,
@@ -10,12 +11,14 @@ interface ScriptWorkerResponse {
   id: string;
   result?: ScriptExecutionResult;
   error?: string;
+  errorKind?: ScriptErrorKind;
 }
 
 const failedResult = (
   input: ScriptExecutionInput,
   error: string,
-  durationMs: number
+  durationMs: number,
+  kind: ScriptErrorKind,
 ): ScriptExecutionResult => ({
   request: input.request,
   environment: input.environment,
@@ -27,6 +30,7 @@ const failedResult = (
     logs: [],
     tests: [],
     error,
+    error_info: { kind, message: error },
   },
 });
 
@@ -70,7 +74,8 @@ export const executeRequestScript = async (
         failedResult(
           input,
           `Script exceeded the ${WORKER_TIMEOUT_MS} ms execution limit`,
-          WORKER_TIMEOUT_MS
+          WORKER_TIMEOUT_MS,
+          "timeout",
         )
       );
     }, WORKER_TIMEOUT_MS);
@@ -85,7 +90,8 @@ export const executeRequestScript = async (
         failedResult(
           input,
           event.data.error || "Script execution failed",
-          Math.round((performance.now() - startedAt) * 10) / 10
+          Math.round((performance.now() - startedAt) * 10) / 10,
+          event.data.errorKind || "worker",
         )
       );
     };
@@ -94,11 +100,11 @@ export const executeRequestScript = async (
         failedResult(
           input,
           event.message || "Script worker failed",
-          Math.round((performance.now() - startedAt) * 10) / 10
+          Math.round((performance.now() - startedAt) * 10) / 10,
+          "worker",
         )
       );
     };
     worker.postMessage({ id, input });
   });
 };
-

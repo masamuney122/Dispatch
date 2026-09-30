@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { getMethodHexColor } from "../../constants/httpConstants";
 
 interface UrlActionBarProps {
@@ -11,6 +11,7 @@ interface UrlActionBarProps {
   onChangeUrl: (url: string) => void;
   onSend: () => void;
   onSave: () => void;
+  onSaveAs: () => void;
   loading: boolean;
 }
 
@@ -26,10 +27,34 @@ export const UrlActionBar: React.FC<UrlActionBarProps> = ({
   onChangeUrl,
   onSend,
   onSave,
+  onSaveAs,
   loading,
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState(title);
+  const [saveMenuOpen, setSaveMenuOpen] = useState(false);
+  const saveMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!saveMenuOpen) return;
+
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!saveMenuRef.current?.contains(event.target as Node)) {
+        setSaveMenuOpen(false);
+      }
+    };
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSaveMenuOpen(false);
+    };
+
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [saveMenuOpen]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !loading) {
@@ -96,17 +121,43 @@ export const UrlActionBar: React.FC<UrlActionBarProps> = ({
           )}
         </div>
 
-        <div className="flex items-center">
+        <div ref={saveMenuRef} className="relative flex items-center">
           <button
             type="button"
             onClick={onSave}
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-zinc-400 transition-colors hover:bg-[#2a2a2a] hover:text-zinc-100"
+            className="flex items-center gap-1.5 rounded-l-md px-3 py-1.5 text-xs font-semibold text-zinc-400 transition-colors hover:bg-[#2a2a2a] hover:text-zinc-100"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
             </svg>
             <span>Save</span>
           </button>
+          <button
+            type="button"
+            aria-label="Open save options"
+            aria-expanded={saveMenuOpen}
+            onClick={() => setSaveMenuOpen((open) => !open)}
+            className="flex self-stretch items-center rounded-r-md border-l border-[#393939] px-1.5 text-zinc-500 transition-colors hover:bg-[#2a2a2a] hover:text-zinc-100"
+          >
+            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {saveMenuOpen && (
+            <div className="absolute right-0 top-full z-40 mt-1 min-w-[132px] rounded-md border border-[#414141] bg-[#282828] p-1 shadow-xl">
+              <button
+                type="button"
+                onClick={() => {
+                  setSaveMenuOpen(false);
+                  onSaveAs();
+                }}
+                className="flex w-full items-center rounded px-3 py-2 text-left text-xs font-medium text-zinc-200 transition-colors hover:bg-[#363636]"
+              >
+                Save As...
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

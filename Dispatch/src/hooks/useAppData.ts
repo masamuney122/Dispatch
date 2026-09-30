@@ -2,7 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { HistoryItem } from "../types/history";
 import type { Collection, OrderItem } from "../types/collection";
 import type { Environment } from "../types/environment";
-import { loadHistory, clearHistory } from "../services/historyService";
+import {
+  loadHistory,
+  clearHistory,
+  deleteHistoryItem,
+} from "../services/historyService";
 import {
   createCollection,
   deleteCollection,
@@ -12,6 +16,7 @@ import {
   renameFolder,
   deleteFolder,
   duplicateFolder,
+  moveFolder,
   createRequestInCollection,
   renameRequestInCollection,
   duplicateRequestInCollection,
@@ -50,19 +55,25 @@ export function useAppData() {
   const flushPendingEnvironmentSaves = useCallback(async () => {
     environmentSaveTimers.current.forEach((timer) => clearTimeout(timer));
     environmentSaveTimers.current.clear();
-    const drafts = [...pendingEnvironmentDrafts.current.entries()];
+    const drafts = [...pendingEnvironmentDrafts.current.entries()].map(
+      ([id, draft]) => ({
+        id,
+        draft,
+        version: environmentSaveVersions.current.get(id) || 0,
+      }),
+    );
 
-    await Promise.all(
-      drafts.map(async ([id, draft]) => {
-        const saved = await updateEnvironment(id, draft.name, draft.variables);
+    for (const { id, draft, version } of drafts) {
+      const saved = await updateEnvironment(id, draft.name, draft.variables);
+      if (environmentSaveVersions.current.get(id) === version) {
         pendingEnvironmentDrafts.current.delete(id);
         setEnvironments((current) =>
           current.map((environment) =>
             environment.id === saved.id ? saved : environment
           )
         );
-      })
-    );
+      }
+    }
   }, []);
 
   useEffect(
@@ -89,21 +100,16 @@ export function useAppData() {
     };
     fetchInitialData();
 
-    const handleHistoryUpdate = async () => {
-      try {
-        const histList = await loadHistory();
-        setHistory(histList || []);
-      } catch (err) {
-        console.error("Failed to reload history:", err);
-      }
-    };
-    window.addEventListener("history-updated", handleHistoryUpdate);
-    return () => window.removeEventListener("history-updated", handleHistoryUpdate);
   }, []);
 
   const handleClearHistory = async () => {
     await clearHistory();
     setHistory([]);
+  };
+
+  const handleDeleteHistoryItem = async (id: string) => {
+    await deleteHistoryItem(id);
+    setHistory((current) => current.filter((item) => item.id !== id));
   };
 
   // ── Collection handlers ───────────────────────────────────────────────────
@@ -176,6 +182,21 @@ export function useAppData() {
     folderId: string
   ) => {
     await duplicateFolder(collectionId, folderId);
+    await refreshCollections();
+  };
+
+  const handleMoveFolder = async (
+    sourceCollectionId: string,
+    folderId: string,
+    targetCollectionId: string,
+    targetParentFolderId: string | null,
+  ) => {
+    await moveFolder(
+      sourceCollectionId,
+      folderId,
+      targetCollectionId,
+      targetParentFolderId,
+    );
     await refreshCollections();
   };
 
@@ -384,6 +405,7 @@ export function useAppData() {
     activeEnvironmentId,
     environmentError,
     handleClearHistory,
+    handleDeleteHistoryItem,
     handleCreateCollection,
     handleRenameCollection,
     handleDeleteCollection,
@@ -392,6 +414,7 @@ export function useAppData() {
     handleRenameFolder,
     handleDeleteFolder,
     handleDuplicateFolder,
+    handleMoveFolder,
     handleCreateRequest,
     handleRenameRequest,
     handleDuplicateRequest,

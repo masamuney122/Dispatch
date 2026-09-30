@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use base64::Engine;
 use dispatch_core::{ApiRequest, GlobalHttpSettings, HttpVersionPreference, PreparedBody};
@@ -20,8 +21,13 @@ pub(super) fn build_client(
         .danger_accept_invalid_certs(!settings.verify_ssl)
         .referer(!settings.remove_referer_on_redirect)
         .redirect(redirect_policy);
-    if let Some(cookie_jar) = cookie_jar {
-        builder = builder.cookie_provider(cookie_jar);
+    if settings.request_timeout_ms > 0 {
+        builder = builder.timeout(Duration::from_millis(settings.request_timeout_ms));
+    }
+    if settings.cookies_enabled {
+        if let Some(cookie_jar) = cookie_jar {
+            builder = builder.cookie_provider(cookie_jar);
+        }
     }
     builder = match settings.http_version {
         HttpVersionPreference::Auto => builder,

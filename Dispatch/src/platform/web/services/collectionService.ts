@@ -81,6 +81,21 @@ export async function duplicateFolder(collectionId: string, folderId: string): P
   return requireEntity(await mutate<Folder>({ action: "duplicate_folder", collection_id: collectionId, folder_id: folderId }));
 }
 
+export async function moveFolder(
+  sourceCollectionId: string,
+  folderId: string,
+  targetCollectionId: string,
+  targetParentFolderId: string | null,
+): Promise<Folder> {
+  return requireEntity(await mutate<Folder>({
+    action: "move_folder",
+    source_collection_id: sourceCollectionId,
+    folder_id: folderId,
+    target_collection_id: targetCollectionId,
+    target_parent_folder_id: targetParentFolderId,
+  }));
+}
+
 export async function createRequestInCollection(
   collectionId: string,
   folderId: string | null,
