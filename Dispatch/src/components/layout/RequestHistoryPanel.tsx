@@ -74,7 +74,7 @@ export function RequestHistoryPanel({
 
   return (
     <div className="flex-1 p-1.5">
-      <div className="mb-px flex items-center justify-between gap-3 select-none text-[11px] font-bold tracking-wider text-zinc-300">
+      <div className="mb-px flex items-center justify-between gap-5 select-none text-[11px] font-bold tracking-wider text-zinc-300">
         <span>REQUEST HISTORY</span>
         {history.length > 0 && (
           <button
