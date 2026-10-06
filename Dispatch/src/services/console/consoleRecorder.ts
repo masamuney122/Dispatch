@@ -78,7 +78,11 @@ function errorCategory(
     return "network-connection";
   }
   if (normalized.includes("response exceeds")) return "response-limit";
-  if (normalized.includes("tarayıcı") || normalized.includes("cors")) {
+  if (
+    normalized.includes("browser") ||
+    normalized.includes("tarayıcı") ||
+    normalized.includes("cors")
+  ) {
     return "browser-network";
   }
   return stage === "network" ? "network" : "unknown";

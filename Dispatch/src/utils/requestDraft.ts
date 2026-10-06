@@ -16,11 +16,30 @@ export function buildRequestUrl(
   if (validParams.length === 0) return targetUrl;
   try {
     const [base, existingSearch] = targetUrl.split("?");
-    const searchParams = new URLSearchParams(existingSearch || "");
+    const templates: string[] = [];
+    const protectTemplates = (value: string) =>
+      value.replace(/\{\{[^{}]*\}\}/g, (template) => {
+        const marker = `__DISPATCH_TEMPLATE_${templates.length}__`;
+        templates.push(template);
+        return marker;
+      });
+    const restoreTemplates = (value: string) =>
+      templates.reduce(
+        (restored, template, index) =>
+          restored.replaceAll(`__DISPATCH_TEMPLATE_${index}__`, template),
+        value,
+      );
+
+    const searchParams = new URLSearchParams(
+      protectTemplates(existingSearch || ""),
+    );
     validParams.forEach((param) => {
-      searchParams.set(param.key.trim(), param.value);
+      searchParams.set(
+        protectTemplates(param.key.trim()),
+        protectTemplates(param.value),
+      );
     });
-    return `${base}?${searchParams.toString()}`;
+    return `${base}?${restoreTemplates(searchParams.toString())}`;
   } catch {
     return targetUrl;
   }

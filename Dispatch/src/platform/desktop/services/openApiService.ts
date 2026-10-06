@@ -12,7 +12,7 @@ import type {
 
 function nativeSource(source: OpenApiSource): { kind: "file"; path: string } | { kind: "text"; content: string } {
   if (source.kind === "text") return source;
-  if (!source.path) throw new Error("OpenAPI dosya yolu bulunamadı.");
+  if (!source.path) throw new Error("OpenAPI file path was not found.");
   return { kind: "file", path: source.path };
 }
 
@@ -20,7 +20,7 @@ export async function chooseOpenApiFile(): Promise<OpenApiSource | null> {
   const selected = await open({
     multiple: false,
     directory: false,
-    title: "OpenAPI belgesi seç",
+    title: "Select an OpenAPI document",
     filters: [{ name: "OpenAPI", extensions: ["json", "yaml", "yml"] }],
   });
   if (typeof selected !== "string") return null;
@@ -39,7 +39,7 @@ export async function exportCollectionOpenApi(
 ): Promise<OpenApiExportResult> {
   const extension = options.format === "json" ? "json" : "yaml";
   const path = await save({
-    title: "OpenAPI belgesini kaydet",
+    title: "Save OpenAPI document",
     defaultPath: `${collection.name.replace(/[^a-zA-Z0-9._-]+/g, "-")}.${extension}`,
     filters: [{ name: `OpenAPI ${extension.toUpperCase()}`, extensions: [extension] }],
   });

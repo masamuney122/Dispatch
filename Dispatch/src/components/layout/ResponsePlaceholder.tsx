@@ -39,11 +39,14 @@ const CONSOLE_LEVEL_OPTIONS = [
 
 const getErrorHelpText = (error: string) => {
   const normalized = error.toLowerCase();
+  if (normalized.includes("response exceeds") && normalized.includes("limit")) {
+    return "The response download was stopped before it could exceed the configured size limit.";
+  }
   if (normalized.includes("refused") || normalized.includes("error sending request")) {
     return "Check that the target server is running and accepting connections at this address.";
   }
   if (normalized.includes("timed out") || normalized.includes("timeout")) {
-    return "The server took too long to respond. Check the connection or try again.";
+    return "The request was cancelled after reaching the timeout configured in Global Settings.";
   }
   if (normalized.includes("invalid url") || normalized.includes("builder error")) {
     return "Review the request URL and make sure it includes a valid protocol and host.";
@@ -52,6 +55,28 @@ const getErrorHelpText = (error: string) => {
     return "Check the active environment and make sure every referenced variable has a value.";
   }
   return "Review the request details and try sending it again.";
+};
+
+const getErrorTitle = (error: string) => {
+  const normalized = error.toLowerCase();
+  if (normalized.includes("response exceeds") && normalized.includes("limit")) {
+    return "Response size limit exceeded";
+  }
+  if (normalized.includes("timed out") || normalized.includes("timeout")) {
+    return "Request timed out";
+  }
+  return "Could not send request";
+};
+
+const getErrorLabel = (error: string) => {
+  const normalized = error.toLowerCase();
+  if (normalized.includes("response exceeds") && normalized.includes("limit")) {
+    return "Response download stopped";
+  }
+  if (normalized.includes("timed out") || normalized.includes("timeout")) {
+    return "Timeout limit reached";
+  }
+  return "Request failed";
 };
 
 export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ response, loading, error, scriptReports, consoleEvents, onClearConsole }) => {
@@ -95,12 +120,13 @@ export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ respon
     [scriptReports]
   );
   const scriptFailures = scriptReports.filter((report) => report.status === "failed");
+  const scriptResultCount = scriptTests.length + scriptFailures.length;
 
   const sectionTabs: { key: ResponseSection; label: string; suffix?: React.ReactNode }[] = [
     { key: "body", label: "Body" },
     { key: "cookies", label: "Cookies", suffix: response?.cookies?.length ? <span className="ml-0.5 font-mono text-[10px] text-zinc-500">{response.cookies.length}</span> : undefined },
     { key: "headers", label: "Headers", suffix: <span className="ml-0.5 font-mono text-[10px] text-zinc-500">{responseData?.headers.length || 0}</span> },
-    { key: "tests", label: "Tests", suffix: scriptTests.length ? <span className="ml-0.5 font-mono text-[10px] text-zinc-500">{scriptTests.length}</span> : undefined },
+    { key: "tests", label: "Tests", suffix: scriptResultCount ? <span className={`ml-0.5 font-mono text-[10px] ${scriptFailures.length ? "text-rose-400" : "text-zinc-500"}`}>{scriptResultCount}</span> : undefined },
     { key: "console", label: "Console", suffix: consoleEvents.length ? <span className="ml-0.5 font-mono text-[10px] text-zinc-500">{consoleEvents.length}</span> : undefined },
   ];
 
@@ -187,7 +213,7 @@ export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ respon
       )}
 
       {/* Error state */}
-      {!loading && error && !["tests", "console"].includes(section) && (
+      {!loading && error && !response && !["tests", "console"].includes(section) && (
         <OverlayScrollArea
           containerClassName="flex-1 min-h-0"
           axis="vertical"
@@ -204,7 +230,7 @@ export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ respon
               <h3
                 className="text-[18px] font-semibold text-zinc-100"
               >
-                Could not send request
+                {getErrorTitle(error)}
               </h3>
               <p
                 className="text-[13px] leading-5 text-zinc-500"
@@ -227,7 +253,7 @@ export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ respon
                     style={{ width: "6px", height: "6px" }}
                   />
                   <span className="text-[13px] font-semibold text-rose-300">
-                    Request failed
+                    {getErrorLabel(error)}
                   </span>
                 </div>
 
@@ -247,6 +273,16 @@ export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ respon
             </div>
           </div>
         </OverlayScrollArea>
+      )}
+
+      {!loading && error && response && !["tests", "console"].includes(section) && (
+        <div className="mx-5 mt-3 flex shrink-0 items-start gap-2.5 rounded-lg border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-left">
+          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-400" />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-rose-300">Post-response script failed</p>
+            <p className="mt-0.5 break-words font-mono text-[10px] leading-4 text-rose-200/70 select-text">{error}</p>
+          </div>
+        </div>
       )}
 
       {/* Loaded Response Content */}
@@ -300,7 +336,7 @@ export const ResponsePlaceholder: React.FC<ResponsePlaceholderProps> = ({ respon
           {section === "cookies" && (
             response?.cookie_handling === "browser" ? (
               <div className="flex flex-1 items-center justify-center p-8 text-center">
-                <div><p className="text-sm font-semibold text-zinc-300">Browser managed cookies</p><p className="mt-2 max-w-lg text-xs leading-5 text-zinc-500">Tarayıcı Set-Cookie header'ını JavaScript'e göstermediği için response cookie listesi web sürümünde okunamaz.</p></div>
+                <div><p className="text-sm font-semibold text-zinc-300">Browser managed cookies</p><p className="mt-2 max-w-lg text-xs leading-5 text-zinc-500">The response cookie list cannot be read in the web version because browsers do not expose the Set-Cookie header to JavaScript.</p></div>
               </div>
             ) : response?.cookies?.length ? (
               <OverlayScrollArea containerClassName="flex-1 min-h-0" className="overflow-auto" style={{ padding: "20px 36px 24px" }}>

@@ -30,6 +30,14 @@ function maximumResponseBytes(megabytes: number): number {
   return megabytes <= 0 ? 0 : megabytes * 1024 * 1024;
 }
 
+function responseLimitErrorMessage(megabytes: number): string {
+  return `Response exceeds the configured ${megabytes} MB limit. Increase Maximum response size in Global Settings or set it to 0 to disable the limit.`;
+}
+
+function timeoutErrorMessage(milliseconds: number): string {
+  return `Request timed out after ${milliseconds} ms because it exceeded the configured timeout limit. Increase Request timeout in Global Settings or set it to 0 to disable the limit.`;
+}
+
 async function readResponseBytes(
   response: Response,
   maxResponseSizeMb: number,
@@ -37,17 +45,13 @@ async function readResponseBytes(
   const limit = maximumResponseBytes(maxResponseSizeMb);
   const declaredLength = Number(response.headers.get("content-length"));
   if (limit > 0 && Number.isFinite(declaredLength) && declaredLength > limit) {
-    throw new Error(
-      `Response exceeds the configured ${maxResponseSizeMb} MB limit.`,
-    );
+    throw new Error(responseLimitErrorMessage(maxResponseSizeMb));
   }
 
   if (!response.body) {
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (limit > 0 && bytes.byteLength > limit) {
-      throw new Error(
-        `Response exceeds the configured ${maxResponseSizeMb} MB limit.`,
-      );
+      throw new Error(responseLimitErrorMessage(maxResponseSizeMb));
     }
     return bytes;
   }
@@ -62,9 +66,7 @@ async function readResponseBytes(
       size += value.byteLength;
       if (limit > 0 && size > limit) {
         await reader.cancel();
-        throw new Error(
-          `Response exceeds the configured ${maxResponseSizeMb} MB limit.`,
-        );
+        throw new Error(responseLimitErrorMessage(maxResponseSizeMb));
       }
       chunks.push(value);
     }
@@ -133,17 +135,16 @@ export async function sendBrowserRequest(
       timeoutController.signal.aborted &&
       timeoutController.signal.reason === "timeout"
     ) {
-      throw new Error(
-        `Request timed out after ${settings.request_timeout_ms} ms.`,
-        { cause: error },
-      );
+      throw new Error(timeoutErrorMessage(settings.request_timeout_ms), {
+        cause: error,
+      });
     }
     if (error instanceof DOMException && error.name === "AbortError") throw error;
     if (error instanceof Error && error.message.startsWith("Response exceeds")) {
       throw error;
     }
     throw new Error(
-      "Request tarayıcı tarafından gönderilemedi. Endpoint CORS izni vermiyor, ağ erişilemiyor veya URL geçersiz olabilir.",
+      "The browser could not send the request. The endpoint may not allow CORS, the network may be unavailable, or the URL may be invalid.",
       { cause: error },
     );
   } finally {

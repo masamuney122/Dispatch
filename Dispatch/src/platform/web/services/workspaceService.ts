@@ -35,7 +35,7 @@ function rememberHandle(handle: FileSystemDirectoryHandle, token: string = crypt
 
 function handleFor(token: string): FileSystemDirectoryHandle {
   const handle = handles.get(token);
-  if (!handle) throw new Error("Workspace klasör izni bulunamadı. Klasörü yeniden seç.");
+  if (!handle) throw new Error("Workspace folder permission was not found. Select the folder again.");
   return handle;
 }
 
@@ -95,7 +95,7 @@ export async function closeWorkspace(): Promise<void> {
 export async function exportWorkspaceArchive(_mode: ArchiveMode, _workspaceName: string): Promise<void> {
   void _mode;
   void _workspaceName;
-  throw new Error(".dispatch dışa aktarma web sürümünde desteklenmiyor.");
+  throw new Error("Exporting .dispatch archives is not supported in the web version.");
 }
 
 export async function chooseWorkspaceArchive(): Promise<WorkspaceLocation | null> {
@@ -108,7 +108,7 @@ export async function chooseImportDestination(): Promise<WorkspaceLocation | nul
 
 export async function inspectWorkspaceArchive(_token: string): Promise<ArchivePreview> {
   void _token;
-  throw new Error(".dispatch içe aktarma web sürümünde desteklenmiyor.");
+  throw new Error("Importing .dispatch archives is not supported in the web version.");
 }
 
 export async function importWorkspaceArchive(
@@ -119,5 +119,5 @@ export async function importWorkspaceArchive(
   void _archiveToken;
   void _destinationToken;
   void _workspaceName;
-  throw new Error(".dispatch içe aktarma web sürümünde desteklenmiyor.");
+  throw new Error("Importing .dispatch archives is not supported in the web version.");
 }

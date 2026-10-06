@@ -56,7 +56,9 @@ describe("sendBrowserRequest", () => {
 
     await expect(
       sendBrowserRequest(preparedRequest({ max_response_size_mb: 1 })),
-    ).rejects.toThrow("Response exceeds the configured 1 MB limit");
+    ).rejects.toThrow(
+      "Response exceeds the configured 1 MB limit. Increase Maximum response size in Global Settings or set it to 0 to disable the limit.",
+    );
   });
 
   it("aborts a request after the configured timeout", async () => {
@@ -77,7 +79,7 @@ describe("sendBrowserRequest", () => {
       preparedRequest({ request_timeout_ms: 25 }),
     );
     const expectation = expect(request).rejects.toThrow(
-      "Request timed out after 25 ms",
+      "Request timed out after 25 ms because it exceeded the configured timeout limit. Increase Request timeout in Global Settings or set it to 0 to disable the limit.",
     );
     await vi.advanceTimersByTimeAsync(25);
     await expectation;

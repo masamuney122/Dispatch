@@ -70,7 +70,9 @@ export function OpenApiImportDialog({
     const source = sourceForCurrentMode();
     if (!source) {
       setInspectError(
-        sourceMode === "file" ? "Önce bir OpenAPI dosyası seç." : "OpenAPI YAML veya JSON kodunu gir."
+        sourceMode === "file"
+          ? "Select an OpenAPI file first."
+          : "Enter OpenAPI YAML or JSON."
       );
       return;
     }
@@ -104,7 +106,7 @@ export function OpenApiImportDialog({
   const disabled = submitting || inspecting;
 
   return (
-    <DialogFrame title="OpenAPI içe aktar" onClose={onClose} disabled={disabled} wide>
+    <DialogFrame title="Import OpenAPI" onClose={onClose} disabled={disabled} wide>
       <div className="mb-4 flex border-b border-[#3a3a3a]">
         <SourceTab
           active={sourceMode === "file"}
@@ -113,7 +115,7 @@ export function OpenApiImportDialog({
             invalidatePreview();
           }}
         >
-          Dosyadan
+          File
         </SourceTab>
         <SourceTab
           active={sourceMode === "text"}
@@ -122,7 +124,7 @@ export function OpenApiImportDialog({
             invalidatePreview();
           }}
         >
-          Metin
+          Text
         </SourceTab>
       </div>
 
@@ -131,15 +133,15 @@ export function OpenApiImportDialog({
           <div className="flex gap-2">
             <div className={`${inputClass} flex min-w-0 flex-1 items-center font-mono text-zinc-400`}>
               <span className="truncate">
-                {fileSource?.kind === "file" ? fileSource.name : "Henüz bir OpenAPI dosyası seçilmedi"}
+                {fileSource?.kind === "file" ? fileSource.name : "No OpenAPI file selected"}
               </span>
             </div>
             <SecondaryButton onClick={() => void handleChooseFile()} disabled={disabled}>
-              Dosya seç
+              Select file
             </SecondaryButton>
           </div>
         ) : (
-          <Field label="OpenAPI YAML veya JSON">
+          <Field label="OpenAPI YAML or JSON">
             <textarea
               value={content}
               onChange={(event) => {
@@ -147,7 +149,7 @@ export function OpenApiImportDialog({
                 invalidatePreview();
               }}
               spellCheck={false}
-              placeholder={`openapi: 3.1.0\ninfo:\n  title: Örnek API\n  version: 1.0.0\npaths:\n  /health:\n    get:\n      summary: Health check`}
+              placeholder={`openapi: 3.1.0\ninfo:\n  title: Example API\n  version: 1.0.0\npaths:\n  /health:\n    get:\n      summary: Health check`}
               className="h-56 w-full select-text resize-y rounded-lg border border-[#404040] bg-[#1d1d1d] p-3 font-mono text-xs leading-5 text-zinc-200 outline-none transition selection:bg-[#ff6c37]/30 focus:border-[#ff6c37]/80"
             />
           </Field>
@@ -155,7 +157,7 @@ export function OpenApiImportDialog({
 
         <div className="flex justify-end">
           <SecondaryButton onClick={() => void handleInspect()} disabled={disabled || !source}>
-            {inspecting ? "Analiz ediliyor..." : preview ? "Yeniden analiz et" : "Analiz et"}
+            {inspecting ? "Analyzing..." : preview ? "Analyze again" : "Analyze"}
           </SecondaryButton>
         </div>
       </div>
@@ -164,13 +166,13 @@ export function OpenApiImportDialog({
         <div className="mt-4 space-y-4 border-t border-[#393939] pt-4">
           <div className="grid grid-cols-3 gap-2 rounded-lg border border-[#3a3a3a] bg-[#202020] p-3 text-xs">
             <Metric label="Endpoint" value={preview.endpoint_count} />
-            <Metric label="Klasör" value={folderCount} />
+            <Metric label="Folders" value={folderCount} />
             <Metric label="Auth scheme" value={preview.security_schemes.length} />
           </div>
 
           <div className="space-y-3">
             <ReadOnlyRow label="OpenAPI" value={preview.specification_version} />
-            <Field label="Collection adı">
+            <Field label="Collection name">
               <input
                 value={collectionName}
                 onChange={(event) => setCollectionName(event.target.value)}
@@ -178,7 +180,7 @@ export function OpenApiImportDialog({
               />
             </Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Request isimlendirme">
+              <Field label="Request naming">
                 <select
                   value={requestNaming}
                   onChange={(event) => setRequestNaming(event.target.value as OpenApiRequestNaming)}
@@ -189,7 +191,7 @@ export function OpenApiImportDialog({
                   <option value="url">URL</option>
                 </select>
               </Field>
-              <Field label="Klasör düzeni">
+              <Field label="Folder organization">
                 <select
                   value={folderOrganization}
                   onChange={(event) =>
@@ -209,14 +211,14 @@ export function OpenApiImportDialog({
                   onChange={(event) => setSelectedServer(event.target.value)}
                   className={inputClass}
                 >
-                  <option value="">Belgedeki server kapsamlarını koru (önerilen)</option>
+                  <option value="">Preserve server scopes from the document (recommended)</option>
                   {preview.servers.map((server) => <option key={server}>{server}</option>)}
                 </select>
               ) : (
                 <input
                   value={selectedServer}
                   onChange={(event) => setSelectedServer(event.target.value)}
-                  placeholder="https://api.example.com (opsiyonel)"
+                  placeholder="https://api.example.com (optional)"
                   className={inputClass}
                 />
               )}
@@ -228,10 +230,10 @@ export function OpenApiImportDialog({
                 onChange={(event) => setCreateEnvironment(event.target.checked)}
                 className="accent-[#ff6c37]"
               />
-              baseUrl ve path değişkenleri için environment oluştur
+              Create an environment for baseUrl and path variables
             </label>
             {createEnvironment && (
-              <Field label="Environment adı">
+              <Field label="Environment name">
                 <input
                   value={environmentName}
                   onChange={(event) => setEnvironmentName(event.target.value)}
@@ -243,19 +245,6 @@ export function OpenApiImportDialog({
         </div>
       )}
 
-      {preview && preview.warnings.length > 0 && (
-        <div className="mt-4 max-h-32 overflow-y-auto rounded-lg border border-amber-900/60 bg-amber-950/15 p-3">
-          <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-amber-400">
-            {preview.warnings.length} uyarı
-          </p>
-          <ul className="space-y-1.5 text-[11px] leading-4 text-amber-200/70">
-            {preview.warnings.map((warning, index) => (
-              <li key={`${warning.code}-${index}`}>• {warning.message}{warning.location ? ` (${warning.location})` : ""}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       {(inspectError || error) && (
         <p className="mt-4 whitespace-pre-wrap rounded-lg border border-red-900/60 bg-red-950/20 p-3 font-mono text-xs leading-5 text-red-300">
           {inspectError || error}
@@ -263,7 +252,7 @@ export function OpenApiImportDialog({
       )}
 
       <div className="mt-5 flex justify-end gap-2">
-        <SecondaryButton onClick={onClose} disabled={disabled}>İptal</SecondaryButton>
+        <SecondaryButton onClick={onClose} disabled={disabled}>Cancel</SecondaryButton>
         <PrimaryButton
           disabled={disabled || !preview || !source || !collectionName.trim()}
           onClick={() => {
@@ -278,7 +267,7 @@ export function OpenApiImportDialog({
             });
           }}
         >
-          {submitting ? "İçe aktarılıyor..." : "İçe aktar"}
+          {submitting ? "Importing..." : "Import"}
         </PrimaryButton>
       </div>
     </DialogFrame>

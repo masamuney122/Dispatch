@@ -35,6 +35,20 @@ The server listens on `http://127.0.0.1:8080`.
 | OAuth authorize | `GET /oauth/authorize` | `response_type=code`, client ID, loopback redirect URI, state and PKCE S256 challenge |
 | OAuth token | `POST /oauth/token` | URL-encoded OAuth token request |
 | OAuth resource | `/api/auth/oauth` | token issued by `/oauth/token` |
+| Cookies | `GET /api/cookies/set` | Configurable name, value, path, Max-Age, Secure, HttpOnly, SameSite and Domain |
+|  | `GET /api/cookies/set-multiple` | Three independent `Set-Cookie` headers |
+|  | `GET /api/cookies/show` | Parsed cookies and the raw request `Cookie` header |
+|  | `GET /api/cookies/path/show` | Positive cookie path-boundary probe |
+|  | `GET /api/cookies/pathology/show` | Negative cookie path-boundary probe |
+|  | `GET /api/cookies/redirect` | Stores a cookie on a 302 before following the redirect |
+|  | `DELETE /api/cookies/delete` | Deletes one cookie with `Max-Age=0` |
+|  | `DELETE /api/cookies/clear-test-cookies` | Clears cookies used by the manual collection |
+| Diagnostics | `GET /api/diagnostics/status/{code}` | Returns the requested HTTP status |
+|  | `GET /api/diagnostics/delay?ms=250` | Deterministic delayed response, up to 10 seconds |
+|  | `GET /api/diagnostics/redirect` | One local redirect |
+|  | `GET /api/diagnostics/redirect-chain?remaining=2` | Configurable local redirect chain |
+|  | `GET /api/diagnostics/response/headers` | Custom and repeated response headers |
+|  | `GET /api/diagnostics/response/{text,html,binary,empty,malformed-json,large}` | Response rendering and limit probes |
 
 OAuth client credentials are `dispatch-client` / `dispatch-secret`.
 The Password grant resource-owner credentials are `testuser` / `testpass`.

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { getMethodHexColor } from "../../constants/httpConstants";
+import { EnvironmentUrlEditor } from "./EnvironmentUrlEditor";
 
 interface UrlActionBarProps {
   method: string;
@@ -8,6 +9,7 @@ interface UrlActionBarProps {
   onChangeTitle?: (title: string) => void;
   onChangeMethod: (method: string) => void;
   url: string;
+  environmentVariables: Record<string, string>;
   onChangeUrl: (url: string) => void;
   onSend: () => void;
   onSave: () => void;
@@ -24,6 +26,7 @@ export const UrlActionBar: React.FC<UrlActionBarProps> = ({
   onChangeTitle,
   onChangeMethod,
   url,
+  environmentVariables,
   onChangeUrl,
   onSend,
   onSave,
@@ -56,12 +59,6 @@ export const UrlActionBar: React.FC<UrlActionBarProps> = ({
     };
   }, [saveMenuOpen]);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !loading) {
-      onSend();
-    }
-  };
-
   const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.currentTarget.blur();
@@ -80,7 +77,7 @@ export const UrlActionBar: React.FC<UrlActionBarProps> = ({
 
   return (
     <div className="flex flex-col gap-2 font-sans select-none shrink-0">
-      {/* Üst Sıra: Başlık ve Save aksiyonu */}
+      {/* Top row: title and Save action */}
       <div className="flex items-center justify-between text-xs">
         <div className="flex items-center gap-1.5 text-zinc-100 font-bold">
           {breadcrumbItems.map((item, index) => (
@@ -161,12 +158,12 @@ export const UrlActionBar: React.FC<UrlActionBarProps> = ({
         </div>
       </div>
 
-      {/* Alt Sıra: Metod + URL Bar ve Send Butonu (Arasında ferah gap-4) */}
-      <div className="flex h-[34px] items-stretch gap-3">
-        {/* Metod + URL Giriş Kutusu */}
-        <div className="flex-1 flex items-stretch border border-[#555555] bg-[#242424] rounded-lg overflow-hidden focus-within:border-[#7aa2f7] transition-all">
-          {/* Metod Seçici */}
-          <div className="relative flex items-center border-r border-[#333333] bg-[#222222]">
+      {/* Bottom row: method, URL bar, and Send button */}
+      <div className="flex h-[34px] min-w-0 items-stretch gap-3">
+        {/* Method and URL input */}
+        <div className="relative z-10 flex min-w-0 flex-1 items-stretch overflow-visible rounded-lg border border-[#555555] bg-[#242424] transition-all focus-within:border-[#7aa2f7]">
+          {/* Method selector */}
+          <div className="relative flex shrink-0 items-center overflow-hidden rounded-l-[7px] border-r border-[#333333] bg-[#222222]">
             <select
               value={method}
               onChange={(e) => onChangeMethod(e.target.value)}
@@ -186,18 +183,16 @@ export const UrlActionBar: React.FC<UrlActionBarProps> = ({
             </svg>
           </div>
 
-          <input
-            type="text"
+          <EnvironmentUrlEditor
             value={url}
-            onChange={(e) => onChangeUrl(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Enter URL or paste text"
-            style={{ paddingLeft: '16px', paddingRight: '16px' }}
-            className="flex-1 bg-transparent text-sm text-zinc-100 font-mono focus:outline-none placeholder-zinc-500"
+            variables={environmentVariables}
+            loading={loading}
+            onChange={onChangeUrl}
+            onSend={onSend}
           />
         </div>
 
-        {/* Gönder (Send) Mavi Buton Grubu (Ferah biçimde sağ tarafta) */}
+        {/* Blue Send button group */}
         <div className="flex items-stretch shadow-sm select-none">
           <button
             onClick={onSend}

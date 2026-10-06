@@ -1,14 +1,21 @@
 
 import type { QueryParamItem } from "../../types/tab";
 import type { AuthConfig } from "../../types/auth";
+import { EnvironmentVariableEditor } from "./EnvironmentUrlEditor";
 
 interface QueryParamsTableProps {
   params: QueryParamItem[];
   onChange: (params: QueryParamItem[]) => void;
   auth?: AuthConfig;
+  environmentVariables: Record<string, string>;
 }
 
-export const QueryParamsTable: React.FC<QueryParamsTableProps> = ({ params, onChange, auth }) => {
+export const QueryParamsTable: React.FC<QueryParamsTableProps> = ({
+  params,
+  onChange,
+  auth,
+  environmentVariables,
+}) => {
   const updateParam = (index: number, field: "key" | "value", val: string) => {
     const updated = [...params];
     updated[index] = { ...updated[index], [field]: val };
@@ -76,21 +83,23 @@ export const QueryParamsTable: React.FC<QueryParamsTableProps> = ({ params, onCh
               params.map((param, idx) => (
                 <tr key={idx} className="h-7 hover:bg-[#202020] transition-colors group">
                   <td style={{ padding: '0 24px' }}>
-                    <input
-                      type="text"
+                    <EnvironmentVariableEditor
                       value={param.key}
-                      onChange={(e) => updateParam(idx, "key", e.target.value)}
+                      variables={environmentVariables}
+                      onChange={(value) => updateParam(idx, "key", value)}
                       placeholder="Key"
-                      className="h-7 w-full bg-transparent px-1 text-zinc-200 font-mono text-xs focus:outline-none"
+                      ariaLabel={`Query parameter ${idx + 1} key`}
+                      variant="table"
                     />
                   </td>
                   <td className="border-l border-[#2e2e2e]" style={{ padding: '0 24px' }}>
-                    <input
-                      type="text"
+                    <EnvironmentVariableEditor
                       value={param.value}
-                      onChange={(e) => updateParam(idx, "value", e.target.value)}
+                      variables={environmentVariables}
+                      onChange={(value) => updateParam(idx, "value", value)}
                       placeholder="Value"
-                      className="h-7 w-full bg-transparent px-1 text-zinc-200 font-mono text-xs focus:outline-none"
+                      ariaLabel={`Query parameter ${idx + 1} value`}
+                      variant="table"
                     />
                   </td>
                   <td className="h-7 border-l border-[#2e2e2e] flex items-center justify-between" style={{ padding: '0 24px' }}>

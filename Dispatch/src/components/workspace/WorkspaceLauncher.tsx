@@ -56,11 +56,11 @@ export function WorkspaceLauncher({
   const submitWorkspace = async (event: FormEvent) => {
     event.preventDefault();
     if (!pathToken) {
-      onError("Workspace klasörünü seçmelisin.");
+      onError("Select a workspace folder.");
       return;
     }
     if (mode === "create" && !name.trim()) {
-      onError("Yeni workspace için bir ad yazmalısın.");
+      onError("Enter a name for the new workspace.");
       return;
     }
 
@@ -132,11 +132,11 @@ export function WorkspaceLauncher({
 
   const importArchive = async () => {
     if (!archiveToken || !archivePreview) {
-      onError("Önce geçerli bir .dispatch dosyası seçmelisin.");
+      onError("Select a valid .dispatch file first.");
       return;
     }
     if (!destinationToken) {
-      onError("Workspace'in oluşturulacağı klasörü seçmelisin.");
+      onError("Select the folder where the workspace will be created.");
       return;
     }
 
@@ -168,10 +168,10 @@ export function WorkspaceLauncher({
         <section className="relative w-full max-w-[900px] overflow-hidden rounded-xl border border-[#383838] bg-[#242424] shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
           <header className="px-12 pb-6 pt-7 text-center sm:px-16">
             <h1 className="text-[27px] font-semibold tracking-[-0.02em] text-zinc-50">
-              Dispatch&apos;e hoş geldin
+              Welcome to Dispatch
             </h1>
             <p className="mx-auto mt-2 max-w-[620px] text-sm leading-5 text-zinc-400">
-              İsteklerini, collection&apos;larını ve environment&apos;larını tek bir taşınabilir klasörde düzenle.
+              Organize your requests, collections, and environments in one portable folder.
             </p>
           </header>
 
@@ -180,20 +180,20 @@ export function WorkspaceLauncher({
               active={mode === "open"}
               onClick={() => selectMode("open")}
             >
-              Mevcut workspace
+              Existing workspace
             </ModeButton>
             <ModeButton
               active={mode === "create"}
               onClick={() => selectMode("create")}
             >
-              Yeni workspace
+              New workspace
             </ModeButton>
             {supportsWorkspaceArchive && (
               <ModeButton
                 active={mode === "import"}
                 onClick={() => selectMode("import")}
               >
-                .dispatch içe aktar
+                Import .dispatch
               </ModeButton>
             )}
           </nav>
@@ -253,7 +253,7 @@ export function WorkspaceLauncher({
 
           <footer className="flex items-center justify-center gap-2 border-t border-[#333333] bg-[#222222] px-8 py-3 text-[11px] text-zinc-500">
             <span className="h-1.5 w-1.5 rounded-full bg-[#ff6c37]" />
-            Workspace verileri seçtiğin klasörde yerel olarak saklanır.
+            Workspace data is stored locally in the folder you select.
           </footer>
         </section>
       </div>

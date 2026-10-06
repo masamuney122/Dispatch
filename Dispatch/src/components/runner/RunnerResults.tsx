@@ -26,6 +26,31 @@ const duration = (milliseconds: number) =>
     ? `${Math.floor(milliseconds / 1000)}s ${milliseconds % 1000}ms`
     : `${milliseconds}ms`;
 
+const resultBadgeStyle = (
+  httpStatus: number | null,
+  resultStatus: RunnerResultStatus,
+) => {
+  if (httpStatus != null) {
+    if (httpStatus >= 200 && httpStatus < 300) {
+      return "bg-emerald-500/15 text-emerald-300";
+    }
+    if (httpStatus >= 300 && httpStatus < 400) {
+      return "bg-sky-500/15 text-sky-300";
+    }
+    if (httpStatus >= 400 && httpStatus < 500) {
+      return "bg-amber-500/15 text-amber-300";
+    }
+    if (httpStatus >= 500) {
+      return "bg-red-500/15 text-red-300";
+    }
+    return "bg-zinc-500/15 text-zinc-400";
+  }
+
+  if (resultStatus === "failed") return "bg-amber-500/15 text-amber-300";
+  if (resultStatus === "error") return "bg-red-500/15 text-red-300";
+  return "bg-zinc-500/15 text-zinc-400";
+};
+
 export const RunnerResults: React.FC<RunnerResultsProps> = ({
   runner,
   environmentName,
@@ -190,7 +215,7 @@ export const RunnerResults: React.FC<RunnerResultsProps> = ({
                           <span className="w-12 text-[11px] font-bold" style={{ color: getMethodHexColor(result.method) }}>{result.method}</span>
                           <div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold text-zinc-200">{result.name}</p><p className="mt-1 truncate font-mono text-[10px] text-zinc-600">{result.url}</p></div>
                           {result.virtualUser && <span className="text-[10px] text-zinc-600">VU {result.virtualUser}</span>}
-                          <span className={`rounded px-2 py-1 font-mono text-[11px] ${result.status === "passed" ? "bg-emerald-500/15 text-emerald-300" : result.status === "failed" ? "bg-amber-500/15 text-amber-300" : result.status === "skipped" ? "bg-zinc-500/15 text-zinc-400" : "bg-red-500/15 text-red-300"}`}>{result.httpStatus || result.status}</span>
+                          <span className={`rounded px-2 py-1 font-mono text-[11px] ${resultBadgeStyle(result.httpStatus, result.status)}`}>{result.httpStatus ?? result.status}</span>
                           <span className="w-16 text-right font-mono text-[11px] text-zinc-500">{result.responseTimeMs == null ? "—" : `${result.responseTimeMs} ms`}</span>
                           <span className="w-14 text-right font-mono text-[11px] text-zinc-500">{result.responseSize == null ? "—" : formatSize(result.responseSize)}</span>
                         </button>

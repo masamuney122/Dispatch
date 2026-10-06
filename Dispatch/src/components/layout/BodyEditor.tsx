@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import type { BinaryBody, BodyField, RequestBodyType } from "../../types/request";
+import { EnvironmentVariableEditor } from "./EnvironmentUrlEditor";
 
 interface BodyEditorProps {
   body: string;
@@ -7,6 +8,7 @@ interface BodyEditorProps {
   formFields: BodyField[];
   binary?: BinaryBody;
   method: string;
+  environmentVariables: Record<string, string>;
   onChangeBody: (body: string) => void;
   onChangeBodyType: (bodyType: RequestBodyType) => void;
   onChangeFormFields: (fields: BodyField[]) => void;
@@ -37,6 +39,7 @@ export const BodyEditor: React.FC<BodyEditorProps> = ({
   formFields,
   binary,
   method,
+  environmentVariables,
   onChangeBody,
   onChangeBodyType,
   onChangeFormFields,
@@ -111,21 +114,23 @@ export const BodyEditor: React.FC<BodyEditorProps> = ({
           {formFields.map((field, index) => (
             <tr key={index} className="hover:bg-[#202020] transition-colors group">
               <td className="border-r border-[#2e2e2e]" style={{ padding: "4px 12px" }}>
-                <input
-                  type="text"
+                <EnvironmentVariableEditor
                   value={field.key}
-                  onChange={(event) => updateField(index, "key", event.target.value)}
+                  variables={environmentVariables}
+                  onChange={(value) => updateField(index, "key", value)}
                   placeholder="Key"
-                  className="w-full bg-transparent px-1 py-1 font-mono text-xs text-zinc-200 focus:outline-none focus:bg-[#2a2a2a] rounded"
+                  ariaLabel={`Body field ${index + 1} key`}
+                  variant="table"
                 />
               </td>
               <td className="border-r border-[#2e2e2e]" style={{ padding: "4px 16px" }}>
-                <input
-                  type="text"
+                <EnvironmentVariableEditor
                   value={field.value}
-                  onChange={(event) => updateField(index, "value", event.target.value)}
+                  variables={environmentVariables}
+                  onChange={(value) => updateField(index, "value", value)}
                   placeholder="Value"
-                  className="w-full bg-transparent px-1 py-1 font-mono text-xs text-zinc-200 focus:outline-none focus:bg-[#2a2a2a] rounded"
+                  ariaLabel={`Body field ${index + 1} value`}
+                  variant="table"
                 />
               </td>
               <td style={{ padding: "4px 16px" }}>
@@ -186,8 +191,16 @@ export const BodyEditor: React.FC<BodyEditorProps> = ({
       {bodyType === "none" && <div className="border border-[#383838] rounded-lg bg-[#202020] px-4 py-8 text-center text-zinc-500">No request body will be sent.</div>}
 
       {["json", "text", "html", "xml"].includes(bodyType) && (
-        <div className="border border-[#383838] rounded-lg bg-[#202020] overflow-hidden shadow-sm">
-          <textarea value={body} onChange={(event) => onChangeBody(event.target.value)} rows={10} placeholder={BODY_PLACEHOLDERS[bodyType]} className="w-full bg-transparent p-4 font-mono text-xs text-zinc-200 leading-relaxed focus:outline-none resize-y min-h-[160px]" spellCheck={false} />
+        <div className="h-[220px] min-h-[160px] resize-y overflow-hidden rounded-lg border border-[#383838] bg-[#202020] shadow-sm">
+          <EnvironmentVariableEditor
+            value={body}
+            variables={environmentVariables}
+            onChange={onChangeBody}
+            placeholder={BODY_PLACEHOLDERS[bodyType]}
+            ariaLabel="Request body"
+            variant="body"
+            multiline
+          />
         </div>
       )}
 

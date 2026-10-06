@@ -67,7 +67,7 @@ function mutate(
 }
 
 function requireEnvironment(result: MutationResult): Environment {
-  if (!result.environment) throw new Error("Environment işlemi sonuç üretmedi.");
+  if (!result.environment) throw new Error("The environment operation returned no result.");
   return result.environment;
 }
 

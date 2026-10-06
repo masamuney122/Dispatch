@@ -7,11 +7,10 @@ export function setActiveWorkspace(workspace: OpenWorkspace | null): void {
 }
 
 export function getActiveWorkspace(): OpenWorkspace {
-  if (!activeWorkspace) throw new Error("Önce bir workspace açmalısın.");
+  if (!activeWorkspace) throw new Error("Open a workspace first.");
   return activeWorkspace;
 }
 
 export function updateActiveWorkspace(workspace: OpenWorkspace): void {
   activeWorkspace = workspace;
 }
-

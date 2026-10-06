@@ -151,7 +151,7 @@ export function CookieManagerDialog({ requestUrl, onClose }: Props) {
   };
 
   const removeDomain = (domain: string, cookies: StoredCookie[]) => {
-    if (cookies.length > 0 && !window.confirm(`${domain} alanındaki tüm cookie'ler silinsin mi?`)) return;
+    if (cookies.length > 0 && !window.confirm(`Delete all cookies for ${domain}?`)) return;
     if (editorDomain === domain) cancelDraft();
     setAddedDomains((current) => current.filter((item) => item !== domain));
     if (cookies.length === 0) return;
@@ -182,18 +182,18 @@ export function CookieManagerDialog({ requestUrl, onClose }: Props) {
         </div>
 
         {!snapshot ? (
-          <div className="flex flex-1 items-center justify-center text-xs text-zinc-500">Cookie jar yükleniyor…</div>
+          <div className="flex flex-1 items-center justify-center text-xs text-zinc-500">Loading cookie jar…</div>
         ) : snapshot.mode === "browser" ? (
           <div className="flex-1 space-y-5 overflow-y-auto px-7 pb-7">
             <div className="rounded-xl border border-sky-900/40 bg-sky-950/20 p-5">
               <h3 className="text-sm font-semibold text-zinc-100">Browser managed cookies</h3>
               <p className="mt-2 max-w-3xl text-xs leading-5 text-zinc-400">
-                Web sürümünde Cookie ve Set-Cookie header'ları JavaScript'e kapalıdır. Dispatch cookie değerlerini okuyamaz veya düzenleyemez; tarayıcının cookie deposunu fetch credentials politikasıyla kullanır.
+                In the web version, Cookie and Set-Cookie headers are not exposed to JavaScript. Dispatch cannot read or edit cookie values; it uses the browser cookie store according to the fetch credentials policy.
               </p>
             </div>
             <div className="rounded-xl border border-[#383838] bg-[#202020] p-5">
               <label className="text-xs font-semibold text-zinc-200">Fetch credentials</label>
-              <p className="mt-1 text-[11px] text-zinc-500">Bu global varsayılan request Settings bölümünden request bazında override edilebilir.</p>
+              <p className="mt-1 text-[11px] text-zinc-500">This global default can be overridden per request in Request Settings.</p>
               <div className="mt-4 flex gap-2">
                 {(["omit", "same-origin", "include"] as CookieCredentials[]).map((value) => (
                   <button key={value} type="button" disabled={!settings || busy} onClick={() => updateCredentials(value)} className={`rounded-lg border px-4 py-2 text-xs font-semibold transition ${settings?.cookie_credentials === value ? "border-[#ff6c37] bg-[#ff6c37]/10 text-[#ff7a47]" : "border-[#404040] bg-[#242424] text-zinc-400 hover:bg-[#2a2a2a]"}`}>
@@ -313,7 +313,7 @@ export function CookieManagerDialog({ requestUrl, onClose }: Props) {
               <button
                 type="button"
                 disabled={busy || snapshot.cookies.length === 0}
-                onClick={() => window.confirm("Workspace cookie jar tamamen temizlensin mi?") && void run(async () => {
+                onClick={() => window.confirm("Clear the entire workspace cookie jar?") && void run(async () => {
                   await clearCookies();
                   cancelDraft();
                   setAddedDomains([]);

@@ -40,7 +40,7 @@ export async function parseOpenApi(content: string): Promise<Record<string, unkn
   try {
     return parse_openapi(content) as Record<string, unknown>;
   } catch (error) {
-    throw wasmError(error, "OpenAPI belgesi doğrulanamadı");
+    throw wasmError(error, "The OpenAPI document could not be validated");
   }
 }
 
@@ -52,7 +52,7 @@ export async function exportCollectionOpenApiCore(
   try {
     return export_collection_openapi(collection, options) as CoreOpenApiExportDocument;
   } catch (error) {
-    throw wasmError(error, "OpenAPI belgesi oluşturulamadı");
+    throw wasmError(error, "The OpenAPI document could not be generated");
   }
 }
 
@@ -64,7 +64,7 @@ export async function inspectOpenApiCore(
   try {
     return inspect_openapi(spec, fallbackTitle) as OpenApiImportPreview;
   } catch (error) {
-    throw wasmError(error, "OpenAPI özeti oluşturulamadı");
+    throw wasmError(error, "The OpenAPI summary could not be generated");
   }
 }
 
@@ -85,6 +85,6 @@ export async function importOpenApiCore(
       context,
     ) as CoreOpenApiImportDocument;
   } catch (error) {
-    throw wasmError(error, "OpenAPI collection'a dönüştürülemedi");
+    throw wasmError(error, "The OpenAPI document could not be converted into a collection");
   }
 }

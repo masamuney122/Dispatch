@@ -72,15 +72,22 @@ export function useRequestTabs() {
     );
   };
 
-  const handleAddTab = () => {
+  const openRequestTab = (updates: Partial<RequestTabState> = {}) => {
     const newTab = createDefaultTab(tabs.length + 1);
-    setTabs((prev) => [...prev, newTab]);
+    const initializedTab: RequestTabState = {
+      ...newTab,
+      ...updates,
+      id: newTab.id,
+    };
+    setTabs((prev) => [...prev, initializedTab]);
     setWorkspaceTabs((prev) => [
       ...prev,
       { id: newTab.id, kind: "request", requestId: newTab.id },
     ]);
     setActiveTabId(newTab.id);
   };
+
+  const handleAddTab = () => openRequestTab();
 
   const handleCloseTab = (idToClose: string) => {
     const tabToClose = workspaceTabs.find((tab) => tab.id === idToClose);
@@ -240,6 +247,7 @@ export function useRequestTabs() {
     setActiveTabId,
     updateActiveTab,
     clearHttpSettingOverrides,
+    openRequestTab,
     handleAddTab,
     handleCloseTab,
     openEnvironmentTab,

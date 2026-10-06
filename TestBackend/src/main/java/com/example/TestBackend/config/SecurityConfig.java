@@ -50,6 +50,12 @@ public class SecurityConfig {
                 "http://127.0.0.1:*"));
         configuration.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"));
         configuration.setAllowedHeaders(java.util.List.of("*"));
+        configuration.setExposedHeaders(java.util.List.of(
+                "X-Method-Test",
+                "X-Dispatch-Test",
+                "X-Dispatch-Multi",
+                HttpHeaders.ALLOW,
+                HttpHeaders.LOCATION));
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

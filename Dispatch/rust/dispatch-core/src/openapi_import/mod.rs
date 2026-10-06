@@ -5,9 +5,13 @@ mod schema;
 
 use std::collections::{HashMap, HashSet};
 
+use serde::Deserialize;
 use serde_json::Value;
 
-use crate::{ApiRequest, Collection, Folder, OpenApiWarning, SavedRequest, inspect_openapi};
+use crate::{
+    ApiRequest, BodyField, Collection, Folder, OpenApiWarning, RequestBodyType,
+    RequestHttpSettings, SavedRequest, inspect_openapi,
+};
 use request::{ConversionState, convert_operation};
 
 pub use models::{
@@ -16,6 +20,34 @@ pub use models::{
 };
 
 const HTTP_METHODS: [&str; 7] = ["get", "post", "put", "patch", "delete", "head", "options"];
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DispatchRequestMetadata {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    method: Option<String>,
+    #[serde(default)]
+    url: Option<String>,
+    #[serde(default)]
+    body_type: Option<RequestBodyType>,
+    #[serde(default)]
+    folder: Option<String>,
+    #[serde(default)]
+    order: Option<i64>,
+    #[serde(default)]
+    settings: Option<RequestHttpSettings>,
+    #[serde(default)]
+    request: Option<ApiRequest>,
+}
+
+struct ImportedRequestVariant {
+    name: String,
+    folder: Option<String>,
+    order: Option<i64>,
+    request: ApiRequest,
+}
 
 pub fn import_openapi(
     spec: &Value,
@@ -81,12 +113,6 @@ pub fn import_openapi(
                     .and_then(Value::as_str),
                 OpenApiFolderOrganization::Path => first_static_path_segment(path_name),
             };
-            let folder_id = folder_name
-                .map(|name| ensure_folder(name, context, &mut folders, &mut folder_by_name));
-            let sibling_order = requests
-                .iter()
-                .filter(|request: &&SavedRequest| request.folder_id == folder_id)
-                .count() as i64;
             let request = convert_operation(
                 spec,
                 path_name,
@@ -96,22 +122,34 @@ pub fn import_openapi(
                 selected_server,
                 &mut state,
             );
-            let name = request_name(
+            let default_name = request_name(
                 operation,
                 method,
                 path_name,
                 &request,
                 &options.request_naming,
             );
-            requests.push(SavedRequest {
-                id: format!("{}-request-{}", context.id_prefix, requests.len()),
-                name,
-                request,
-                folder_id,
-                order: sibling_order,
-                created_at: context.timestamp.clone(),
-                updated_at: context.timestamp.clone(),
-            });
+            for variant in dispatch_request_variants(operation, request, default_name) {
+                let variant_folder_name = match options.folder_organization {
+                    OpenApiFolderOrganization::Tags => variant.folder.as_deref().or(folder_name),
+                    OpenApiFolderOrganization::Path => folder_name,
+                };
+                let folder_id = variant_folder_name
+                    .map(|name| ensure_folder(name, context, &mut folders, &mut folder_by_name));
+                let sibling_order = requests
+                    .iter()
+                    .filter(|request: &&SavedRequest| request.folder_id == folder_id)
+                    .count() as i64;
+                requests.push(SavedRequest {
+                    id: format!("{}-request-{}", context.id_prefix, requests.len()),
+                    name: variant.name,
+                    request: variant.request,
+                    folder_id,
+                    order: variant.order.unwrap_or(sibling_order),
+                    created_at: context.timestamp.clone(),
+                    updated_at: context.timestamp.clone(),
+                });
+            }
         }
     }
 
@@ -130,6 +168,179 @@ pub fn import_openapi(
         environment_variables: state.environment_variables,
         warnings: state.warnings,
     })
+}
+
+fn dispatch_request_variants(
+    operation: &Value,
+    default_request: ApiRequest,
+    default_name: String,
+) -> Vec<ImportedRequestVariant> {
+    let Some(items) = operation
+        .get("x-dispatch-requests")
+        .and_then(Value::as_array)
+        .filter(|items| !items.is_empty())
+    else {
+        return vec![ImportedRequestVariant {
+            name: default_name,
+            folder: None,
+            order: None,
+            request: default_request,
+        }];
+    };
+
+    let variants = items
+        .iter()
+        .filter_map(|item| {
+            let metadata = serde_json::from_value::<DispatchRequestMetadata>(item.clone()).ok()?;
+            if metadata.request.is_none()
+                && metadata.name.is_none()
+                && metadata.method.is_none()
+                && metadata.url.is_none()
+            {
+                return None;
+            }
+
+            let has_full_request = metadata.request.is_some();
+            let mut request = metadata.request.unwrap_or_else(|| default_request.clone());
+            if let Some(method) = metadata.method.filter(|value| !value.trim().is_empty()) {
+                request.method = method;
+            }
+            if let Some(url) = metadata.url.filter(|value| !value.trim().is_empty()) {
+                request.url = url;
+            }
+            if let Some(body_type) = metadata.body_type {
+                request.body_type = body_type;
+            }
+            if let Some(settings) = metadata.settings {
+                request.settings = settings;
+            }
+            let name = metadata
+                .name
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or_else(|| default_name.clone());
+            if !has_full_request {
+                apply_dispatch_named_examples(operation, &name, &mut request);
+            }
+
+            Some(ImportedRequestVariant {
+                name,
+                folder: metadata.folder.filter(|value| !value.trim().is_empty()),
+                order: metadata.order,
+                request,
+            })
+        })
+        .collect::<Vec<_>>();
+
+    if variants.is_empty() {
+        vec![ImportedRequestVariant {
+            name: default_name,
+            folder: None,
+            order: None,
+            request: default_request,
+        }]
+    } else {
+        variants
+    }
+}
+
+fn apply_dispatch_named_examples(operation: &Value, request_name: &str, request: &mut ApiRequest) {
+    let example_key = dispatch_example_key(request_name);
+    if let Some(parameters) = operation.get("parameters").and_then(Value::as_array) {
+        for parameter in parameters {
+            if parameter.get("in").and_then(Value::as_str) != Some("header") {
+                continue;
+            }
+            let Some(name) = parameter.get("name").and_then(Value::as_str) else {
+                continue;
+            };
+            let Some(value) = named_example_value(parameter, &example_key, request_name) else {
+                continue;
+            };
+            request
+                .headers
+                .insert(name.to_string(), schema::value_to_text(value.clone()));
+        }
+    }
+
+    let media_type = match request.body_type {
+        RequestBodyType::Json => "application/json",
+        RequestBodyType::Text => "text/plain",
+        RequestBodyType::Html => "text/html",
+        RequestBodyType::Xml => "application/xml",
+        RequestBodyType::FormData => "multipart/form-data",
+        RequestBodyType::XWwwFormUrlencoded => "application/x-www-form-urlencoded",
+        RequestBodyType::None | RequestBodyType::Binary => return,
+    };
+    let Some(media) = operation.pointer(&format!(
+        "/requestBody/content/{}",
+        pointer_escape(media_type)
+    )) else {
+        return;
+    };
+    let Some(value) = named_example_value(media, &example_key, request_name) else {
+        return;
+    };
+
+    match request.body_type {
+        RequestBodyType::Json => {
+            request.body = serde_json::to_string_pretty(value).unwrap_or_default();
+        }
+        RequestBodyType::Text | RequestBodyType::Html | RequestBodyType::Xml => {
+            request.body = schema::value_to_text(value.clone());
+        }
+        RequestBodyType::FormData | RequestBodyType::XWwwFormUrlencoded => {
+            request.body.clear();
+            request.form_fields = value
+                .as_object()
+                .map(|fields| {
+                    fields
+                        .iter()
+                        .map(|(key, value)| BodyField {
+                            key: key.clone(),
+                            value: schema::value_to_text(value.clone()),
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+        }
+        RequestBodyType::None | RequestBodyType::Binary => {}
+    }
+}
+
+fn named_example_value<'a>(
+    container: &'a Value,
+    key: &str,
+    request_name: &str,
+) -> Option<&'a Value> {
+    let examples = container.get("examples")?.as_object()?;
+    examples
+        .get(key)
+        .or_else(|| {
+            examples.values().find(|example| {
+                example.get("summary").and_then(Value::as_str) == Some(request_name)
+            })
+        })
+        .and_then(|example| example.get("value"))
+}
+
+fn dispatch_example_key(name: &str) -> String {
+    let value = name
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() {
+                character
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>()
+        .trim_matches('_')
+        .to_string();
+    if value.is_empty() {
+        "request".to_string()
+    } else {
+        value
+    }
 }
 
 fn validate_context(context: &OpenApiImportContext) -> Result<(), String> {
@@ -427,6 +638,153 @@ paths:
         assert_eq!(
             imported.collection.requests[0].name,
             "{{baseUrl}}/{tenant}/users/{id}"
+        );
+    }
+
+    #[test]
+    fn expands_legacy_dispatch_request_metadata() {
+        let spec = json!({
+            "openapi": "3.0.3",
+            "info": { "title": "Dispatch export", "version": "1" },
+            "paths": {
+                "/get": {
+                    "get": {
+                        "summary": "Primary request",
+                        "tags": ["Primary"],
+                        "x-dispatch-request-count": 2,
+                        "x-dispatch-requests": [
+                            {
+                                "name": "First request",
+                                "method": "GET",
+                                "url": "https://one.example.com/get",
+                                "bodyType": "none",
+                                "folder": "First folder",
+                                "settings": {}
+                            },
+                            {
+                                "name": "Second request",
+                                "method": "GET",
+                                "url": "https://two.example.com/get?variant=2",
+                                "bodyType": "none",
+                                "folder": "Second folder",
+                                "settings": { "follow_redirects": false }
+                            }
+                        ],
+                        "responses": { "200": { "description": "OK" } }
+                    }
+                }
+            }
+        });
+
+        let imported = import_openapi(
+            &spec,
+            "Dispatch export",
+            None,
+            &OpenApiImportOptions::default(),
+            &context(),
+        )
+        .unwrap();
+
+        assert_eq!(imported.collection.requests.len(), 2);
+        assert_eq!(imported.collection.requests[0].name, "First request");
+        assert_eq!(
+            imported.collection.requests[1].request.url,
+            "https://two.example.com/get?variant=2"
+        );
+        assert_eq!(
+            imported.collection.requests[1]
+                .request
+                .settings
+                .follow_redirects,
+            Some(false)
+        );
+        let folder_names = imported
+            .collection
+            .folders
+            .iter()
+            .map(|folder| folder.name.as_str())
+            .collect::<Vec<_>>();
+        assert!(folder_names.contains(&"First folder"));
+        assert!(folder_names.contains(&"Second folder"));
+    }
+
+    #[test]
+    fn dispatch_export_import_round_trip_preserves_grouped_requests() {
+        use crate::{
+            Collection, OpenApiExportFormat, OpenApiExportOptions, export_collection_openapi,
+        };
+
+        let source: Collection = serde_json::from_value(json!({
+            "id": "source",
+            "name": "Round trip",
+            "folders": [],
+            "requests": [
+                {
+                    "id": "one",
+                    "name": "JSON variant",
+                    "request": {
+                        "method": "POST",
+                        "url": "https://api.example.com/items",
+                        "body": "{\"kind\":\"json\"}",
+                        "body_type": "json",
+                        "form_fields": [],
+                        "headers": { "X-Variant": "json" },
+                        "auth": { "type": "Bearer", "token": "token-one" },
+                        "settings": { "follow_redirects": false },
+                        "scripts": { "pre_request": "console.log('before');", "post_response": "" }
+                    },
+                    "folder_id": null,
+                    "order": 0
+                },
+                {
+                    "id": "two",
+                    "name": "Text variant",
+                    "request": {
+                        "method": "POST",
+                        "url": "https://api.example.com/items?format=text",
+                        "body": "plain text",
+                        "body_type": "text",
+                        "form_fields": [],
+                        "headers": { "X-Variant": "text" },
+                        "auth": { "type": "Basic", "username": "user", "password": "pass" },
+                        "settings": { "verify_ssl": false },
+                        "scripts": { "pre_request": "", "post_response": "console.log('after');" }
+                    },
+                    "folder_id": null,
+                    "order": 1
+                }
+            ]
+        }))
+        .unwrap();
+        let exported = export_collection_openapi(
+            &source,
+            &OpenApiExportOptions {
+                title: "Round trip".into(),
+                api_version: "1.0.0".into(),
+                format: OpenApiExportFormat::Json,
+                server_url: None,
+            },
+        )
+        .unwrap();
+        let spec: Value = serde_json::from_str(&exported.content).unwrap();
+        let imported = import_openapi(
+            &spec,
+            "Round trip",
+            None,
+            &OpenApiImportOptions::default(),
+            &context(),
+        )
+        .unwrap();
+
+        assert_eq!(exported.endpoint_count, 1);
+        assert_eq!(imported.collection.requests.len(), source.requests.len());
+        assert_eq!(
+            imported.collection.requests[0].request,
+            source.requests[0].request
+        );
+        assert_eq!(
+            imported.collection.requests[1].request,
+            source.requests[1].request
         );
     }
 }

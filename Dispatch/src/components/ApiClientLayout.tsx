@@ -11,6 +11,7 @@ import { OverlayScrollArea } from "./common/OverlayScrollArea";
 import { GlobalSettingsDialog } from "./settings/GlobalSettingsDialog";
 import { CookieManagerDialog } from "./cookies/CookieManagerDialog";
 import { CollectionRunnerPanel } from "./runner/CollectionRunnerPanel";
+import { CurlImportDialog } from "./import/CurlImportDialog";
 
 import { useRequestTabs } from "../hooks/useRequestTabs";
 import { useAppData } from "../hooks/useAppData";
@@ -29,11 +30,14 @@ import { saveRequestToCollection, createCollection, updateRequestInCollection } 
 
 import type { SavedRequest } from "../types/collection";
 import type { HistoryItem } from "../types/history";
+import type { ApiRequest } from "../types/request";
 import type { ArchiveMode } from "../types/workspace";
+import type { CurlImportResult } from "../utils/curlImport";
 import { exportWorkspaceArchive } from "../services/workspaceService";
 import { flushWorkspaceChanges } from "../services/workspaceLifecycle";
 import { platformCapabilities } from "../services/platformService";
 import {
+  buildRequestUrl,
   createRequestPayload,
   historyTabUpdates,
   requestBreadcrumb,
@@ -60,6 +64,7 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
     activeWorkspaceTab,
     setActiveTabId,
     updateActiveTab,
+    openRequestTab,
     clearHttpSettingOverrides,
     handleAddTab,
     handleCloseTab,
@@ -116,6 +121,7 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
   const [sidebarMode, setSidebarMode] = useState<"collections" | "history">("collections");
   const [saveDialogMode, setSaveDialogMode] = useState<"save" | "saveAs" | null>(null);
   const [cookieManagerOpen, setCookieManagerOpen] = useState(false);
+  const [curlImportOpen, setCurlImportOpen] = useState(false);
 
   const globalHttp = useGlobalHttpSettings({
     collections,
@@ -177,6 +183,44 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
   const handleOpenCollectionRunner = (collection: (typeof collections)[number]) => {
     const runner = collectionRunner.openRunner(collection);
     openRunnerTab(runner.id);
+  };
+
+  const handleImportCurl = async (
+    imported: CurlImportResult,
+    collectionId: string,
+  ) => {
+    const request: ApiRequest = {
+      method: imported.method,
+      url: buildRequestUrl(imported.url, imported.queryParams),
+      body: imported.body,
+      body_type: imported.bodyType,
+      form_fields: imported.formFields,
+      headers: Object.fromEntries(
+        imported.headers
+          .filter((header) => header.enabled !== false && header.key.trim())
+          .map((header) => [header.key.trim(), header.value]),
+      ),
+      auth: imported.auth,
+      settings: {},
+      scripts: { pre_request: "", post_response: "" },
+    };
+    const saved = await saveRequestToCollection(
+      collectionId,
+      imported.name,
+      request,
+    );
+    await refreshCollections();
+    openRequestTab({
+      ...savedRequestTabUpdates(saved),
+      activeSectionTab:
+        imported.bodyType !== "none"
+          ? "Body"
+          : imported.headers.length > 0
+            ? "Headers"
+            : "Params",
+    });
+    setSidebarMode("collections");
+    setCurlImportOpen(false);
   };
 
   const handleOpenFolderRunner = (
@@ -295,12 +339,11 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
   // ── Render ──
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#202020] text-zinc-300 font-sans overflow-hidden select-none">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden bg-[#202020] font-sans text-zinc-300 select-none">
       {/* 1. Top Navigation Bar */}
       <TopNavbar
         workspaceName={workspaceName}
         onChangeWorkspace={onChangeWorkspace}
-        onImportOpenApi={openApi.openImport}
         onExportWorkspace={handleExportWorkspace}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -308,13 +351,15 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
       />
 
       {/* Main Workspace */}
-      <div className="relative flex-1 flex min-h-0">
+      <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
         {/* 2. Left Sidebar */}
         <ExplorerSidebar
           width={sidebarWidth}
           mode={sidebarMode}
           onSelectMode={setSidebarMode}
           collections={collections}
+          onImportCurl={() => setCurlImportOpen(true)}
+          onImportOpenApi={openApi.openImport}
           onCreateCollection={handleCreateCollection}
           onRenameCollection={handleRenameCollection}
           onDeleteCollection={handleDeleteCollectionWithCleanup}
@@ -373,7 +418,7 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
         </div>
 
         {/* 3. Main API Client Panel */}
-        <main className="flex-1 flex flex-col min-w-0 bg-[#222222]">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#222222]">
           <RequestTabsBar
             tabs={tabsInfoList}
             activeTabId={activeTabId}
@@ -425,6 +470,11 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
                 activeTab={activeTab}
                 breadcrumbItems={activeRequestBreadcrumb}
                 globalHttpSettings={globalHttp.settings}
+                environmentVariables={
+                  environments.find(
+                    (environment) => environment.id === activeEnvironmentId,
+                  )?.variables ?? {}
+                }
                 requestWorkspaceRef={requestWorkspaceRef}
                 responsePanelHeight={responsePanelHeight}
                 isResizingResponse={isResizingResponse}
@@ -462,6 +512,14 @@ export const ApiClientLayout: React.FC<ApiClientLayoutProps> = ({
           onResetError={openApi.resetError}
           onClose={openApi.closeImport}
           onConfirm={openApi.confirmImport}
+        />
+      )}
+
+      {curlImportOpen && (
+        <CurlImportDialog
+          collections={collections}
+          onClose={() => setCurlImportOpen(false)}
+          onImport={handleImportCurl}
         />
       )}
 

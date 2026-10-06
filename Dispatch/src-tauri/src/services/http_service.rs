@@ -14,6 +14,20 @@ mod response;
 use request_builder::{build_client, build_request};
 use response::into_api_response;
 
+fn timeout_error_message(timeout_ms: u64) -> String {
+    format!(
+        "Request timed out after {timeout_ms} ms because it exceeded the configured timeout limit. Increase Request timeout in Global Settings or set it to 0 to disable the limit."
+    )
+}
+
+fn format_transport_error(error: reqwest::Error, timeout_ms: u64) -> String {
+    if timeout_ms > 0 && error.is_timeout() {
+        timeout_error_message(timeout_ms)
+    } else {
+        error.to_string()
+    }
+}
+
 pub async fn send_request(request: ApiRequest) -> Result<ApiResponse, String> {
     send_request_with_settings(request, &GlobalHttpSettings::default()).await
 }
@@ -60,9 +74,14 @@ pub async fn send_request_with_cookie_jar(
     let response = client
         .execute(request)
         .await
-        .map_err(|error| error.to_string())?;
-    let mut response =
-        into_api_response(response, start, prepared.settings.max_response_size_mb).await?;
+        .map_err(|error| format_transport_error(error, prepared.settings.request_timeout_ms))?;
+    let mut response = into_api_response(
+        response,
+        start,
+        prepared.settings.max_response_size_mb,
+        prepared.settings.request_timeout_ms,
+    )
+    .await?;
     response.request_headers = request_headers;
     Ok(response)
 }
@@ -90,6 +109,7 @@ mod tests {
     use std::net::TcpListener;
     use std::sync::mpsc::{self, Receiver};
     use std::thread;
+    use std::time::Duration;
 
     fn capture_one_request() -> (String, Receiver<String>) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind test server");
@@ -336,6 +356,39 @@ mod tests {
             tauri::async_runtime::block_on(send_request_with_settings(configured, &settings))
                 .expect_err("reject oversized response");
         assert!(error.contains("configured 1 MB limit"));
+        assert!(error.contains("Maximum response size in Global Settings"));
+    }
+
+    #[test]
+    fn reports_the_configured_request_timeout() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind delayed server");
+        let address = listener.local_addr().expect("read delayed server address");
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept delayed request");
+            let mut bytes = [0_u8; 1024];
+            let _ = stream.read(&mut bytes).expect("read delayed request");
+            thread::sleep(Duration::from_millis(100));
+            let _ = stream.write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok",
+            );
+        });
+
+        let settings = GlobalHttpSettings {
+            request_timeout_ms: 20,
+            ..Default::default()
+        };
+        let error = tauri::async_runtime::block_on(send_request_with_settings(
+            request(
+                format!("http://{address}"),
+                "GET",
+                RequestBodyType::None,
+            ),
+            &settings,
+        ))
+        .expect_err("time out delayed response");
+
+        assert!(error.contains("Request timed out after 20 ms"));
+        assert!(error.contains("Request timeout in Global Settings"));
     }
 
     #[test]

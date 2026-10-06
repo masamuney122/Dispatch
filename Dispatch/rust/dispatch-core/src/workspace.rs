@@ -153,19 +153,19 @@ pub struct ResolveResult {
 
 #[derive(Debug, Error, PartialEq)]
 pub enum WorkspaceError {
-    #[error("{file} geçerli JSON değil: {message}")]
+    #[error("{file} is not valid JSON: {message}")]
     InvalidJson { file: &'static str, message: String },
-    #[error("Bu klasör bir Dispatch workspace değil")]
+    #[error("This folder is not a Dispatch workspace")]
     InvalidFormat,
-    #[error("Desteklenmeyen workspace şema sürümü: {0}")]
+    #[error("Unsupported workspace schema version: {0}")]
     UnsupportedSchema(u32),
-    #[error("{file} başka bir workspace'e ait")]
+    #[error("{file} belongs to another workspace")]
     WorkspaceIdMismatch { file: &'static str },
-    #[error("{kind} kimliği birden fazla kez kullanılmış: {id}")]
+    #[error("{kind} ID is used more than once: {id}")]
     DuplicateId { kind: &'static str, id: String },
-    #[error("'{folder}' klasörü yanlış collection kimliğine bağlı")]
+    #[error("Folder '{folder}' is linked to the wrong collection ID")]
     InvalidFolderCollection { folder: String },
-    #[error("'{environment}' environment'ı yanlış workspace kimliğine bağlı")]
+    #[error("Environment '{environment}' is linked to the wrong workspace ID")]
     InvalidEnvironmentWorkspace { environment: String },
 }
 
@@ -207,7 +207,7 @@ pub fn parse_and_validate(
     for collection in &collections.collections {
         ensure_unique(&mut collection_ids, "Collection", &collection.id)?;
         for folder in &collection.folders {
-            ensure_unique(&mut folder_ids, "Klasör", &folder.id)?;
+            ensure_unique(&mut folder_ids, "Folder", &folder.id)?;
             if folder.collection_id != collection.id {
                 return Err(WorkspaceError::InvalidFolderCollection {
                     folder: folder.name.clone(),

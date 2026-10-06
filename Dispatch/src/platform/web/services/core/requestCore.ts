@@ -20,7 +20,7 @@ export async function resolveRequestVariablesCore(
   try {
     return resolve_request_variables(request, variables) as CoreRequestResolution;
   } catch (error) {
-    throw wasmError(error, "Request değişkenleri çözümlenemedi");
+    throw wasmError(error, "Request variables could not be resolved");
   }
 }
 
@@ -32,7 +32,7 @@ export async function prepareRequestCore(
   try {
     return prepare_request(request, globalSettings) as PreparedRequest;
   } catch (error) {
-    throw wasmError(error, "Request gönderime hazırlanamadı");
+    throw wasmError(error, "The request could not be prepared for sending");
   }
 }
 

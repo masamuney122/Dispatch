@@ -43,7 +43,7 @@ const stringValue = (value: unknown): string | null =>
 async function parseSource(source: OpenApiSource): Promise<JsonObject> {
   const content = source.content;
   if (content === undefined) {
-    throw new Error("OpenAPI dosya içeriği okunamadı.");
+    throw new Error("The OpenAPI file could not be read.");
   }
   return parseOpenApi(content);
 }

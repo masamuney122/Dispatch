@@ -2,20 +2,20 @@ import { useState } from "react";
 import type { AuthConfig } from "../../types/auth";
 import type { OAuth2GrantType } from "../../types/auth";
 import { getAuthorizationCodeToken, sendRequest } from "../../services/api";
+import { resolveRequestVariables } from "../../services/environmentVariableResolver";
 import type { ApiRequest } from "../../types/request";
+import { EnvironmentVariableEditor } from "./EnvironmentUrlEditor";
 
 type AuthType = AuthConfig["type"];
 
 interface AuthEditorProps {
   auth: AuthConfig;
+  environmentVariables: Record<string, string>;
   onChange: (auth: AuthConfig) => void;
 }
 
-const inputClass =
-  "bg-[#242424] border border-[#383838] rounded font-mono text-zinc-200 focus:outline-none focus:border-zinc-500";
 const labelClass = "text-zinc-400 font-semibold";
 const oauthRowClass = "grid grid-cols-[180px_minmax(0,1fr)] items-center gap-x-6";
-const oauthInputClass = `w-full px-4 ${inputClass}`;
 const oauthSelectClass =
   "w-full rounded border border-[#383838] bg-[#242424] px-4 font-medium text-zinc-200 focus:outline-none cursor-pointer";
 const oauthControlStyle = {
@@ -24,7 +24,39 @@ const oauthControlStyle = {
   paddingRight: "16px",
 } as const;
 
-export const AuthEditor: React.FC<AuthEditorProps> = ({ auth, onChange }) => {
+interface AuthVariableFieldProps {
+  value: string;
+  variables: Record<string, string>;
+  label: string;
+  placeholder?: string;
+  sensitive?: boolean;
+  onChange: (value: string) => void;
+}
+
+const AuthVariableField: React.FC<AuthVariableFieldProps> = ({
+  value,
+  variables,
+  label,
+  placeholder,
+  sensitive,
+  onChange,
+}) => (
+  <EnvironmentVariableEditor
+    value={value}
+    variables={variables}
+    onChange={onChange}
+    placeholder={placeholder}
+    ariaLabel={label}
+    variant="control"
+    sensitive={sensitive}
+  />
+);
+
+export const AuthEditor: React.FC<AuthEditorProps> = ({
+  auth,
+  environmentVariables,
+  onChange,
+}) => {
   const [tokenLoading, setTokenLoading] = useState(false);
   const [tokenError, setTokenError] = useState<string | null>(null);
 
@@ -61,45 +93,65 @@ export const AuthEditor: React.FC<AuthEditorProps> = ({ auth, onChange }) => {
     setTokenError(null);
 
     try {
-      if (auth.grant_type === "authorization_code") {
-        const authorizationUrl = auth.authorization_url || auth.access_token_url.replace(/\/token(?:\?.*)?$/, "/authorize");
+      const resolvedTemplate = await resolveRequestVariables(
+        {
+          request: {
+            method: "POST",
+            url: auth.access_token_url,
+            headers: {},
+            body: "",
+            body_type: "none",
+            form_fields: [],
+            auth,
+          },
+          queryParams: [],
+        },
+        environmentVariables,
+      );
+      const resolvedAuth = resolvedTemplate.request.auth;
+      if (!resolvedAuth || resolvedAuth.type !== "OAuth2") {
+        throw new Error("OAuth settings could not be resolved.");
+      }
+
+      if (resolvedAuth.grant_type === "authorization_code") {
+        const authorizationUrl = resolvedAuth.authorization_url || resolvedAuth.access_token_url.replace(/\/token(?:\?.*)?$/, "/authorize");
         const token = await getAuthorizationCodeToken({
           authorizationUrl,
-          accessTokenUrl: auth.access_token_url,
-          clientId: auth.client_id,
-          clientSecret: auth.client_secret,
-          scope: auth.scope,
-          redirectUri: auth.redirect_uri || "http://127.0.0.1:8765/callback",
-          clientAuthentication: auth.client_authentication || "header",
+          accessTokenUrl: resolvedAuth.access_token_url,
+          clientId: resolvedAuth.client_id,
+          clientSecret: resolvedAuth.client_secret,
+          scope: resolvedAuth.scope,
+          redirectUri: resolvedAuth.redirect_uri || "http://127.0.0.1:8765/callback",
+          clientAuthentication: resolvedAuth.client_authentication || "header",
         });
-        onChange({ ...auth, authorization_url: authorizationUrl, access_token: token });
+        onChange({ ...auth, access_token: token });
         return;
       }
 
       const form_fields: { key: string; value: string }[] = [];
-      form_fields.push({ key: "grant_type", value: auth.grant_type });
-      if (auth.scope) form_fields.push({ key: "scope", value: auth.scope });
+      form_fields.push({ key: "grant_type", value: resolvedAuth.grant_type });
+      if (resolvedAuth.scope) form_fields.push({ key: "scope", value: resolvedAuth.scope });
 
-      if (auth.grant_type === "password") {
-        form_fields.push({ key: "username", value: auth.username });
-        form_fields.push({ key: "password", value: auth.password });
+      if (resolvedAuth.grant_type === "password") {
+        form_fields.push({ key: "username", value: resolvedAuth.username });
+        form_fields.push({ key: "password", value: resolvedAuth.password });
       }
 
       const headers: Record<string, string> = {
         "Content-Type": "application/x-www-form-urlencoded",
       };
 
-      if (auth.client_authentication === "body") {
-        form_fields.push({ key: "client_id", value: auth.client_id });
-        if (auth.client_secret) form_fields.push({ key: "client_secret", value: auth.client_secret });
+      if (resolvedAuth.client_authentication === "body") {
+        form_fields.push({ key: "client_id", value: resolvedAuth.client_id });
+        if (resolvedAuth.client_secret) form_fields.push({ key: "client_secret", value: resolvedAuth.client_secret });
       } else {
-        const credentials = btoa(`${auth.client_id}:${auth.client_secret}`);
+        const credentials = btoa(`${resolvedAuth.client_id}:${resolvedAuth.client_secret}`);
         headers["Authorization"] = `Basic ${credentials}`;
       }
 
       const request: ApiRequest = {
         method: "POST",
-        url: auth.access_token_url,
+        url: resolvedAuth.access_token_url,
         headers,
         body: "",
         body_type: "x-www-form-urlencoded",
@@ -164,13 +216,13 @@ export const AuthEditor: React.FC<AuthEditorProps> = ({ auth, onChange }) => {
         {auth.type === "Bearer" && (
           <div className={oauthRowClass}>
             <label className={labelClass}>Token</label>
-            <input
-              type="text"
+            <AuthVariableField
               value={auth.token || ""}
-              onChange={(e) => onChange({ ...auth, token: e.target.value })}
+              variables={environmentVariables}
+              onChange={(value) => onChange({ ...auth, token: value })}
               placeholder="e.g. eyJhbGciOi..."
-              className={oauthInputClass}
-              style={oauthControlStyle}
+              label="Bearer token"
+              sensitive
             />
           </div>
         )}
@@ -179,24 +231,23 @@ export const AuthEditor: React.FC<AuthEditorProps> = ({ auth, onChange }) => {
           <div className="flex flex-col" style={{ gap: '12px' }}>
             <div className={oauthRowClass}>
               <label className={labelClass}>Username</label>
-              <input
-                type="text"
+              <AuthVariableField
                 value={auth.username || ""}
-                onChange={(e) => onChange({ ...auth, username: e.target.value })}
+                variables={environmentVariables}
+                onChange={(value) => onChange({ ...auth, username: value })}
                 placeholder="Username"
-                className={oauthInputClass}
-                style={oauthControlStyle}
+                label="Basic auth username"
               />
             </div>
             <div className={oauthRowClass}>
               <label className={labelClass}>Password</label>
-              <input
-                type="password"
+              <AuthVariableField
                 value={auth.password || ""}
-                onChange={(e) => onChange({ ...auth, password: e.target.value })}
+                variables={environmentVariables}
+                onChange={(value) => onChange({ ...auth, password: value })}
                 placeholder="Password"
-                className={oauthInputClass}
-                style={oauthControlStyle}
+                label="Basic auth password"
+                sensitive
               />
             </div>
           </div>
@@ -206,24 +257,23 @@ export const AuthEditor: React.FC<AuthEditorProps> = ({ auth, onChange }) => {
           <div className="flex flex-col" style={{ gap: '12px' }}>
             <div className={oauthRowClass}>
               <label className={labelClass}>Key</label>
-              <input
-                type="text"
+              <AuthVariableField
                 value={auth.key || ""}
-                onChange={(e) => onChange({ ...auth, key: e.target.value })}
+                variables={environmentVariables}
+                onChange={(value) => onChange({ ...auth, key: value })}
                 placeholder="e.g. X-API-Key"
-                className={oauthInputClass}
-                style={oauthControlStyle}
+                label="API key name"
               />
             </div>
             <div className={oauthRowClass}>
               <label className={labelClass}>Value</label>
-              <input
-                type="text"
+              <AuthVariableField
                 value={auth.value || ""}
-                onChange={(e) => onChange({ ...auth, value: e.target.value })}
+                variables={environmentVariables}
+                onChange={(value) => onChange({ ...auth, value })}
                 placeholder="e.g. 12345abcdef"
-                className={oauthInputClass}
-                style={oauthControlStyle}
+                label="API key value"
+                sensitive
               />
             </div>
             <div className={oauthRowClass}>
@@ -263,13 +313,12 @@ export const AuthEditor: React.FC<AuthEditorProps> = ({ auth, onChange }) => {
             {/* Access Token URL */}
             <div className={oauthRowClass}>
               <label className={labelClass}>Token URL</label>
-              <input
-                type="text"
+              <AuthVariableField
                 value={auth.access_token_url}
-                onChange={(e) => onChange({ ...auth, access_token_url: e.target.value })}
+                variables={environmentVariables}
+                onChange={(value) => onChange({ ...auth, access_token_url: value })}
                 placeholder="https://auth.example.com/oauth/token"
-                className={oauthInputClass}
-                style={oauthControlStyle}
+                label="OAuth token URL"
               />
             </div>
 
@@ -277,23 +326,21 @@ export const AuthEditor: React.FC<AuthEditorProps> = ({ auth, onChange }) => {
               <>
                 <div className={oauthRowClass}>
                   <label className={labelClass}>Authorization URL</label>
-                  <input
-                    type="text"
+                  <AuthVariableField
                     value={auth.authorization_url || ""}
-                    onChange={(e) => onChange({ ...auth, authorization_url: e.target.value })}
+                    variables={environmentVariables}
+                    onChange={(value) => onChange({ ...auth, authorization_url: value })}
                     placeholder="http://127.0.0.1:8080/oauth/authorize"
-                    className={oauthInputClass}
-                    style={oauthControlStyle}
+                    label="OAuth authorization URL"
                   />
                 </div>
                 <div className={oauthRowClass}>
                   <label className={labelClass}>Redirect URI</label>
-                  <input
-                    type="text"
+                  <AuthVariableField
                     value={auth.redirect_uri || "http://127.0.0.1:8765/callback"}
-                    onChange={(e) => onChange({ ...auth, redirect_uri: e.target.value })}
-                    className={oauthInputClass}
-                    style={oauthControlStyle}
+                    variables={environmentVariables}
+                    onChange={(value) => onChange({ ...auth, redirect_uri: value })}
+                    label="OAuth redirect URI"
                   />
                 </div>
               </>
@@ -302,39 +349,37 @@ export const AuthEditor: React.FC<AuthEditorProps> = ({ auth, onChange }) => {
             {/* Client ID */}
             <div className={oauthRowClass}>
               <label className={labelClass}>Client ID</label>
-              <input
-                type="text"
+              <AuthVariableField
                 value={auth.client_id}
-                onChange={(e) => onChange({ ...auth, client_id: e.target.value })}
+                variables={environmentVariables}
+                onChange={(value) => onChange({ ...auth, client_id: value })}
                 placeholder="your-client-id"
-                className={oauthInputClass}
-                style={oauthControlStyle}
+                label="OAuth client ID"
               />
             </div>
 
             {/* Client Secret */}
             <div className={oauthRowClass}>
               <label className={labelClass}>Client Secret</label>
-              <input
-                type="password"
+              <AuthVariableField
                 value={auth.client_secret}
-                onChange={(e) => onChange({ ...auth, client_secret: e.target.value })}
+                variables={environmentVariables}
+                onChange={(value) => onChange({ ...auth, client_secret: value })}
                 placeholder="your-client-secret"
-                className={oauthInputClass}
-                style={oauthControlStyle}
+                label="OAuth client secret"
+                sensitive
               />
             </div>
 
             {/* Scope */}
             <div className={oauthRowClass}>
               <label className={labelClass}>Scope</label>
-              <input
-                type="text"
+              <AuthVariableField
                 value={auth.scope}
-                onChange={(e) => onChange({ ...auth, scope: e.target.value })}
+                variables={environmentVariables}
+                onChange={(value) => onChange({ ...auth, scope: value })}
                 placeholder="e.g. read write"
-                className={oauthInputClass}
-                style={oauthControlStyle}
+                label="OAuth scope"
               />
             </div>
 
@@ -359,24 +404,23 @@ export const AuthEditor: React.FC<AuthEditorProps> = ({ auth, onChange }) => {
               <>
                 <div className={oauthRowClass}>
                   <label className={labelClass}>Username</label>
-                  <input
-                    type="text"
+                  <AuthVariableField
                     value={auth.username}
-                    onChange={(e) => onChange({ ...auth, username: e.target.value })}
+                    variables={environmentVariables}
+                    onChange={(value) => onChange({ ...auth, username: value })}
                     placeholder="Resource owner username"
-                    className={oauthInputClass}
-                    style={oauthControlStyle}
+                    label="OAuth resource owner username"
                   />
                 </div>
                 <div className={oauthRowClass}>
                   <label className={labelClass}>Password</label>
-                  <input
-                    type="password"
+                  <AuthVariableField
                     value={auth.password}
-                    onChange={(e) => onChange({ ...auth, password: e.target.value })}
+                    variables={environmentVariables}
+                    onChange={(value) => onChange({ ...auth, password: value })}
                     placeholder="Resource owner password"
-                    className={oauthInputClass}
-                    style={oauthControlStyle}
+                    label="OAuth resource owner password"
+                    sensitive
                   />
                 </div>
               </>
@@ -388,13 +432,13 @@ export const AuthEditor: React.FC<AuthEditorProps> = ({ auth, onChange }) => {
             {/* Access Token Display + Get Token Button */}
             <div className={oauthRowClass}>
               <label className={labelClass}>Access Token</label>
-              <input
-                type="text"
+              <AuthVariableField
                 value={auth.access_token}
-                onChange={(e) => onChange({ ...auth, access_token: e.target.value })}
+                variables={environmentVariables}
+                onChange={(value) => onChange({ ...auth, access_token: value })}
                 placeholder="Paste or fetch token..."
-                className={oauthInputClass}
-                style={oauthControlStyle}
+                label="OAuth access token"
+                sensitive
               />
             </div>
 

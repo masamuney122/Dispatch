@@ -97,7 +97,7 @@ export function PathField({
           />
         </span>
         <SecondaryButton type="button" onClick={() => void onBrowse()}>
-          Klasör seç
+          Select folder
         </SecondaryButton>
         {action}
       </span>

@@ -36,7 +36,7 @@ pub fn apply_request_auth(request: &ApiRequest) -> Result<ApiRequest, String> {
             add_to: ApiKeyLocation::QueryParam,
         } => {
             let mut url = url::Url::parse(&prepared.url)
-                .map_err(|error| format!("API key URL'i geçersiz: {error}"))?;
+                .map_err(|error| format!("Invalid API key URL: {error}"))?;
             let existing = url
                 .query_pairs()
                 .filter(|(name, _)| name != key)

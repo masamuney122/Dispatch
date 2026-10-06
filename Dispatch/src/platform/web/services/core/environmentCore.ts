@@ -23,6 +23,6 @@ export async function applyEnvironmentMutationCore(
       context,
     ) as CoreEnvironmentMutationResult;
   } catch (error) {
-    throw wasmError(error, "Environment işlemi uygulanamadı");
+    throw wasmError(error, "The environment operation could not be applied");
   }
 }

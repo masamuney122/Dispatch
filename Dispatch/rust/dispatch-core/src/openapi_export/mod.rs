@@ -206,7 +206,9 @@ fn collection_to_openapi(
                 "url": saved.request.url,
                 "bodyType": saved.request.body_type,
                 "folder": saved.folder_id.as_ref().and_then(|folder_id| folder_names.get(folder_id)),
-                "settings": request_settings
+                "order": saved.order,
+                "settings": request_settings,
+                "request": saved.request
             }]),
         );
         if !saved.request.scripts.pre_request.trim().is_empty()
@@ -288,6 +290,7 @@ fn collection_to_openapi(
     root.insert(
         "x-dispatch-export".to_string(),
         json!({
+            "formatVersion": 2,
             "sourceRequestCount": request_count,
             "operationCount": endpoint_count,
             "groupedRequestCount": request_count.saturating_sub(endpoint_count),

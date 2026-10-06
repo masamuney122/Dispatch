@@ -17,7 +17,7 @@ export function supportsFileSystemAccess(): boolean {
 
 export async function chooseWorkspaceDirectory(): Promise<FileSystemDirectoryHandle> {
   if (!supportsFileSystemAccess()) {
-    throw new Error("Workspace klasörleri yalnızca güncel Chromium tarayıcılarında ve güvenli bağlantıda açılabilir.");
+    throw new Error("Workspace folders can only be opened in a current Chromium browser over a secure connection.");
   }
   return window.showDirectoryPicker({ id: "dispatch-workspace", mode: "readwrite" });
 }
@@ -28,7 +28,7 @@ export async function ensureWorkspacePermission(
   const options = { mode: "readwrite" as const };
   if ((await directory.queryPermission(options)) === "granted") return;
   if ((await directory.requestPermission(options)) !== "granted") {
-    throw new Error("Workspace klasörüne okuma ve yazma izni verilmedi.");
+    throw new Error("Read and write permission was not granted for the workspace folder.");
   }
 }
 
@@ -38,7 +38,7 @@ async function readTextFile(directory: FileSystemDirectoryHandle, name: string):
     return (await handle.getFile()).text();
   } catch (error) {
     if (error instanceof DOMException && error.name === "NotFoundError") {
-      throw new Error(`${name} bulunamadı. Seçilen klasör bir Dispatch workspace olmayabilir.`, {
+      throw new Error(`${name} was not found. The selected folder may not be a Dispatch workspace.`, {
         cause: error,
       });
     }
@@ -76,12 +76,12 @@ export async function createWorkspaceDirectory(
 ): Promise<OpenWorkspace> {
   await ensureWorkspacePermission(directory);
   const name = workspaceName.trim();
-  if (!name) throw new Error("Workspace adı boş olamaz.");
+  if (!name) throw new Error("Workspace name cannot be empty.");
 
   for (const file of REQUIRED_FILES) {
     try {
       await directory.getFileHandle(file);
-      throw new Error(`${file} zaten var. Yeni workspace için boş bir klasör seç.`);
+      throw new Error(`${file} already exists. Select an empty folder for the new workspace.`);
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "NotFoundError")) throw error;
     }
@@ -104,7 +104,7 @@ async function currentRevision(
   file: typeof COLLECTIONS_FILE | typeof ENVIRONMENTS_FILE,
 ): Promise<number> {
   const parsed = JSON.parse(await readTextFile(directory, file)) as { revision?: unknown };
-  if (typeof parsed.revision !== "number") throw new Error(`${file} revision alanı geçersiz.`);
+  if (typeof parsed.revision !== "number") throw new Error(`${file} has an invalid revision field.`);
   return parsed.revision;
 }
 
@@ -114,7 +114,7 @@ export async function saveCollectionsDocument(
 ): Promise<OpenWorkspace> {
   const diskRevision = await currentRevision(workspace.directory, COLLECTIONS_FILE);
   if (diskRevision !== workspace.bundle.collections.revision) {
-    throw new Error("collections.json başka bir uygulamada değişmiş. Workspace'i yeniden açıp tekrar dene.");
+    throw new Error("collections.json was changed by another application. Reopen the workspace and try again.");
   }
   const next = { ...collections, revision: diskRevision + 1, updated_at: new Date().toISOString() };
   await validateWorkspace(
@@ -132,7 +132,7 @@ export async function saveEnvironmentsDocument(
 ): Promise<OpenWorkspace> {
   const diskRevision = await currentRevision(workspace.directory, ENVIRONMENTS_FILE);
   if (diskRevision !== workspace.bundle.environments.revision) {
-    throw new Error("environments.json başka bir uygulamada değişmiş. Workspace'i yeniden açıp tekrar dene.");
+    throw new Error("environments.json was changed by another application. Reopen the workspace and try again.");
   }
   const next = { ...environments, revision: diskRevision + 1, updated_at: new Date().toISOString() };
   await validateWorkspace(

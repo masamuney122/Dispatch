@@ -26,7 +26,7 @@ export function GlobalSettingsDialog({ settings, platform, saving, error, onClos
     <div className="fixed inset-0 z-[350] flex items-center justify-center bg-black/65 p-6" onMouseDown={() => !saving && onClose()}>
       <div className="max-h-[90vh] w-full max-w-[780px] overflow-y-auto rounded-xl border border-[#414141] bg-[#242424] shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-[#393939] px-6 py-4">
-          <div><h2 className="text-base font-bold text-zinc-100">Global Settings</h2><p className="mt-1 text-xs text-zinc-500">Yeni ve override edilmeyen requestler için HTTP varsayılanları.</p></div>
+          <div><h2 className="text-base font-bold text-zinc-100">Global Settings</h2><p className="mt-1 text-xs text-zinc-500">HTTP defaults for new requests and requests without overrides.</p></div>
           <button type="button" disabled={saving} onClick={onClose} className="rounded p-1 text-zinc-500 hover:bg-[#333] hover:text-white">×</button>
         </div>
         <div className="px-6"><GlobalHttpSettingsEditor value={draft} onChange={setDraft} platform={platform} /></div>
@@ -40,8 +40,8 @@ export function GlobalSettingsDialog({ settings, platform, saving, error, onClos
             <SettingsToggle checked={theme === "light"} onChange={toggleTheme} label="Light theme" />
           </div>
           <div className="flex gap-2">
-            <button type="button" disabled={saving} onClick={onClose} className="h-9 rounded-lg border border-[#464646] bg-[#2c2c2c] px-4 text-xs font-semibold text-zinc-300 hover:bg-[#333] disabled:opacity-40">İptal</button>
-            <button type="button" disabled={saving} onClick={() => void onSave(draft)} className="h-9 rounded-lg bg-[#ff6c37] px-5 text-xs font-bold text-white hover:bg-[#ff7a47] disabled:opacity-40">{saving ? "Kaydediliyor..." : "Kaydet"}</button>
+            <button type="button" disabled={saving} onClick={onClose} className="h-9 rounded-lg border border-[#464646] bg-[#2c2c2c] px-4 text-xs font-semibold text-zinc-300 hover:bg-[#333] disabled:opacity-40">Cancel</button>
+            <button type="button" disabled={saving} onClick={() => void onSave(draft)} className="h-9 rounded-lg bg-[#ff6c37] px-5 text-xs font-bold text-white hover:bg-[#ff7a47] disabled:opacity-40">{saving ? "Saving..." : "Save"}</button>
           </div>
         </div>
       </div>

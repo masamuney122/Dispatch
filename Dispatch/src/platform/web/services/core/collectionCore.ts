@@ -22,6 +22,6 @@ export async function applyCollectionMutationCore(
   try {
     return apply_collection_mutation(collections, mutation, context) as CoreCollectionMutationResult;
   } catch (error) {
-    throw wasmError(error, "Collection işlemi uygulanamadı");
+    throw wasmError(error, "The collection operation could not be applied");
   }
 }

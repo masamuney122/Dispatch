@@ -23,6 +23,7 @@ interface RequestWorkspacePanelProps {
   activeTab: RequestTabState;
   breadcrumbItems: string[];
   globalHttpSettings: GlobalHttpSettings;
+  environmentVariables: Record<string, string>;
   requestWorkspaceRef: RefObject<HTMLDivElement | null>;
   responsePanelHeight: number;
   isResizingResponse: boolean;
@@ -42,6 +43,7 @@ export function RequestWorkspacePanel({
   activeTab,
   breadcrumbItems,
   globalHttpSettings,
+  environmentVariables,
   requestWorkspaceRef,
   responsePanelHeight,
   isResizingResponse,
@@ -77,6 +79,7 @@ export function RequestWorkspacePanel({
               onUpdateTab({ method: method as HttpMethod })
             }
             url={activeTab.url}
+            environmentVariables={environmentVariables}
             onChangeUrl={(url) => onUpdateTab({ url })}
             onSend={onSend}
             onSave={onSave}
@@ -103,11 +106,13 @@ export function RequestWorkspacePanel({
                 params={activeTab.queryParams}
                 onChange={(queryParams) => onUpdateTab({ queryParams })}
                 auth={activeTab.auth}
+                environmentVariables={environmentVariables}
               />
             )}
             {activeTab.activeSectionTab === "Authorization" && (
               <AuthEditor
                 auth={activeTab.auth}
+                environmentVariables={environmentVariables}
                 onChange={(auth) => onUpdateTab({ auth })}
               />
             )}
@@ -117,6 +122,7 @@ export function RequestWorkspacePanel({
                 onChange={(headers) => onUpdateTab({ headers })}
                 bodyType={activeTab.bodyType}
                 auth={activeTab.auth}
+                environmentVariables={environmentVariables}
               />
             )}
             {activeTab.activeSectionTab === "Body" && (
@@ -132,6 +138,7 @@ export function RequestWorkspacePanel({
                 }
                 onChangeBinary={(binary) => onUpdateTab({ binary })}
                 method={activeTab.method}
+                environmentVariables={environmentVariables}
               />
             )}
             {activeTab.activeSectionTab === "Scripts" && (

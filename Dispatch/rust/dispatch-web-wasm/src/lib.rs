@@ -48,18 +48,18 @@ pub fn create_workspace_bundle(
 #[wasm_bindgen]
 pub fn resolve_request_variables(request: JsValue, variables: JsValue) -> Result<JsValue, JsValue> {
     let request: ApiRequest = serde_wasm_bindgen::from_value(request)
-        .map_err(|error| JsValue::from_str(&format!("Request okunamadı: {error}")))?;
+        .map_err(|error| JsValue::from_str(&format!("Failed to read request: {error}")))?;
     let variables: HashMap<String, String> = serde_wasm_bindgen::from_value(variables)
-        .map_err(|error| JsValue::from_str(&format!("Değişkenler okunamadı: {error}")))?;
+        .map_err(|error| JsValue::from_str(&format!("Failed to read variables: {error}")))?;
     to_json_compatible_value(&resolve_request_variables_core(&request, &variables))
 }
 
 #[wasm_bindgen]
 pub fn prepare_request(request: JsValue, global_settings: JsValue) -> Result<JsValue, JsValue> {
     let request: ApiRequest = serde_wasm_bindgen::from_value(request)
-        .map_err(|error| JsValue::from_str(&format!("Request okunamadı: {error}")))?;
+        .map_err(|error| JsValue::from_str(&format!("Failed to read request: {error}")))?;
     let global_settings: GlobalHttpSettings = serde_wasm_bindgen::from_value(global_settings)
-        .map_err(|error| JsValue::from_str(&format!("HTTP ayarları okunamadı: {error}")))?;
+        .map_err(|error| JsValue::from_str(&format!("Failed to read HTTP settings: {error}")))?;
     let prepared = prepare_request_core(&request, &global_settings)
         .map_err(|error| JsValue::from_str(&error))?;
     to_json_compatible_value(&prepared)
@@ -85,11 +85,13 @@ pub fn apply_collection_mutation(
     context: JsValue,
 ) -> Result<JsValue, JsValue> {
     let collections: Vec<Collection> = serde_wasm_bindgen::from_value(collections)
-        .map_err(|error| JsValue::from_str(&format!("Collection listesi okunamadı: {error}")))?;
-    let mutation: CollectionMutation = serde_wasm_bindgen::from_value(mutation)
-        .map_err(|error| JsValue::from_str(&format!("Collection işlemi okunamadı: {error}")))?;
+        .map_err(|error| JsValue::from_str(&format!("Failed to read collection list: {error}")))?;
+    let mutation: CollectionMutation =
+        serde_wasm_bindgen::from_value(mutation).map_err(|error| {
+            JsValue::from_str(&format!("Failed to read collection operation: {error}"))
+        })?;
     let context: MutationContext = serde_wasm_bindgen::from_value(context)
-        .map_err(|error| JsValue::from_str(&format!("Mutation bağlamı okunamadı: {error}")))?;
+        .map_err(|error| JsValue::from_str(&format!("Failed to read mutation context: {error}")))?;
     let result = apply_collection_mutation_core(&collections, mutation, &context)
         .map_err(|error| JsValue::from_str(&error))?;
     to_json_compatible_value(&result)
@@ -103,11 +105,15 @@ pub fn apply_environment_mutation(
     context: JsValue,
 ) -> Result<JsValue, JsValue> {
     let environments: Vec<Environment> = serde_wasm_bindgen::from_value(environments)
-        .map_err(|error| JsValue::from_str(&format!("Environment listesi okunamadı: {error}")))?;
-    let mutation: EnvironmentMutation = serde_wasm_bindgen::from_value(mutation)
-        .map_err(|error| JsValue::from_str(&format!("Environment işlemi okunamadı: {error}")))?;
-    let context: EnvironmentMutationContext = serde_wasm_bindgen::from_value(context)
-        .map_err(|error| JsValue::from_str(&format!("Environment bağlamı okunamadı: {error}")))?;
+        .map_err(|error| JsValue::from_str(&format!("Failed to read environment list: {error}")))?;
+    let mutation: EnvironmentMutation =
+        serde_wasm_bindgen::from_value(mutation).map_err(|error| {
+            JsValue::from_str(&format!("Failed to read environment operation: {error}"))
+        })?;
+    let context: EnvironmentMutationContext =
+        serde_wasm_bindgen::from_value(context).map_err(|error| {
+            JsValue::from_str(&format!("Failed to read environment context: {error}"))
+        })?;
     let result = apply_environment_mutation_core(
         &environments,
         active_environment_id.as_deref(),
@@ -130,9 +136,9 @@ pub fn export_collection_openapi(
     options: JsValue,
 ) -> Result<JsValue, JsValue> {
     let collection: Collection = serde_wasm_bindgen::from_value(collection)
-        .map_err(|error| JsValue::from_str(&format!("Collection okunamadı: {error}")))?;
+        .map_err(|error| JsValue::from_str(&format!("Failed to read collection: {error}")))?;
     let options: OpenApiExportOptions = serde_wasm_bindgen::from_value(options)
-        .map_err(|error| JsValue::from_str(&format!("OpenAPI ayarları okunamadı: {error}")))?;
+        .map_err(|error| JsValue::from_str(&format!("Failed to read OpenAPI settings: {error}")))?;
     let result = export_collection_openapi_core(&collection, &options)
         .map_err(|error| JsValue::from_str(&error))?;
     to_json_compatible_value(&result)
@@ -141,7 +147,7 @@ pub fn export_collection_openapi(
 #[wasm_bindgen]
 pub fn inspect_openapi(spec: JsValue, fallback_title: &str) -> Result<JsValue, JsValue> {
     let spec: Value = serde_wasm_bindgen::from_value(spec)
-        .map_err(|error| JsValue::from_str(&format!("OpenAPI verisi okunamadı: {error}")))?;
+        .map_err(|error| JsValue::from_str(&format!("Failed to read OpenAPI data: {error}")))?;
     let preview =
         inspect_openapi_core(&spec, fallback_title).map_err(|error| JsValue::from_str(&error))?;
     to_json_compatible_value(&preview)
@@ -156,11 +162,11 @@ pub fn import_openapi(
     context: JsValue,
 ) -> Result<JsValue, JsValue> {
     let spec: Value = serde_wasm_bindgen::from_value(spec)
-        .map_err(|error| JsValue::from_str(&format!("OpenAPI verisi okunamadı: {error}")))?;
+        .map_err(|error| JsValue::from_str(&format!("Failed to read OpenAPI data: {error}")))?;
     let options: OpenApiImportOptions = serde_wasm_bindgen::from_value(options)
-        .map_err(|error| JsValue::from_str(&format!("OpenAPI ayarları okunamadı: {error}")))?;
+        .map_err(|error| JsValue::from_str(&format!("Failed to read OpenAPI settings: {error}")))?;
     let context: OpenApiImportContext = serde_wasm_bindgen::from_value(context)
-        .map_err(|error| JsValue::from_str(&format!("Import bağlamı okunamadı: {error}")))?;
+        .map_err(|error| JsValue::from_str(&format!("Failed to read import context: {error}")))?;
     let result = import_openapi_core(
         &spec,
         collection_name,

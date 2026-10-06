@@ -44,7 +44,13 @@ public class CookieController {
                         "setCookie", cookie.toString()));
     }
 
-    @GetMapping({ "/show", "/scoped/show" })
+    @GetMapping({
+            "/show",
+            "/scoped/show",
+            "/path/show",
+            "/path/deep/show",
+            "/pathology/show"
+    })
     public Map<String, Object> showCookies(HttpServletRequest request) {
         Map<String, String> cookies = request.getCookies() == null
                 ? Map.of()
@@ -61,6 +67,17 @@ public class CookieController {
         result.put("rawCookieHeader", request.getHeader(HttpHeaders.COOKIE));
         result.put("path", request.getRequestURI());
         return result;
+    }
+
+    @GetMapping("/set-multiple")
+    public ResponseEntity<Map<String, Object>> setMultipleCookies() {
+        List<String> values = List.of(
+                buildCookie("multi_root", "root", "/", 3600, false, true, "Lax", "").toString(),
+                buildCookie("multi_path", "path", "/api/cookies/path", 3600, false, true, "Lax", "").toString(),
+                buildCookie("multi_session", "session", "/", -1, false, false, "Lax", "").toString());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, values.toArray(String[]::new))
+                .body(Map.of("stored", true, "count", values.size(), "setCookies", values));
     }
 
     @GetMapping("/redirect")
@@ -98,10 +115,25 @@ public class CookieController {
                 .header(HttpHeaders.SET_COOKIE,
                         buildCookie("dispatch_session", "", "/", 0, false, true, "Lax", "").toString(),
                         buildCookie("redirect_session", "", "/", 0, false, true, "Lax", "").toString(),
-                        buildCookie("scoped_cookie", "", "/api/cookies/scoped", 0, false, true, "Lax", "").toString())
+                        buildCookie("scoped_cookie", "", "/api/cookies/scoped", 0, false, true, "Lax", "").toString(),
+                        buildCookie("boundary_cookie", "", "/api/cookies/path", 0, false, true, "Lax", "").toString(),
+                        buildCookie("multi_root", "", "/", 0, false, true, "Lax", "").toString(),
+                        buildCookie("multi_path", "", "/api/cookies/path", 0, false, true, "Lax", "").toString(),
+                        buildCookie("multi_session", "", "/", 0, false, true, "Lax", "").toString(),
+                        buildCookie("secure_cookie", "", "/", 0, true, true, "Lax", "").toString(),
+                        buildCookie("persistent_cookie", "", "/", 0, false, true, "Lax", "").toString())
                 .body(Map.of(
                         "cleared", true,
-                        "cookies", List.of("dispatch_session", "redirect_session", "scoped_cookie")));
+                        "cookies", List.of(
+                                "dispatch_session",
+                                "redirect_session",
+                                "scoped_cookie",
+                                "boundary_cookie",
+                                "multi_root",
+                                "multi_path",
+                                "multi_session",
+                                "secure_cookie",
+                                "persistent_cookie")));
     }
 
     private ResponseCookie buildCookie(
@@ -121,7 +153,7 @@ public class CookieController {
         }
         if (!sameSite.equalsIgnoreCase("Lax")
                 && !sameSite.equalsIgnoreCase("Strict")
-                && !sameSite.equalsIgnoreCase("Nones")) {
+                && !sameSite.equalsIgnoreCase("None")) {
             throw new IllegalArgumentException("SameSite must be Lax, Strict, or None");
         }
 

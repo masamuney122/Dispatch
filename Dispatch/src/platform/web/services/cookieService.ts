@@ -7,7 +7,7 @@ export async function loadCookieManager(): Promise<CookieManagerSnapshot> {
 }
 
 const unsupported = (): never => {
-  throw new Error("Web sürümünde cookie'ler tarayıcı tarafından yönetilir.");
+  throw new Error("Cookies are managed by the browser in the web version.");
 };
 
 export async function saveCookie(

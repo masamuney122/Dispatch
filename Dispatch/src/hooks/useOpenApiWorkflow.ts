@@ -63,7 +63,7 @@ export function useOpenApiWorkflow({
       setImportOpen(false);
       if (result.warnings.length > 0) {
         window.alert(
-          `OpenAPI içe aktarıldı. ${result.warnings.length} özellik uyarıyla işlendi.`,
+          `OpenAPI imported. ${result.warnings.length} feature(s) were processed with warnings.`,
         );
       }
     } catch (reason) {
@@ -84,23 +84,23 @@ export function useOpenApiWorkflow({
       setExportCollection(null);
       const grouped =
         result.grouped_request_count > 0
-          ? `\n${result.grouped_request_count} request aynı method/path altında örnek olarak gruplandı.`
+          ? `\n${result.grouped_request_count} request(s) were grouped as examples under the same method/path.`
           : "";
       const otherWarnings = result.warnings.filter(
         (warning) => warning.code !== "duplicate-operation-grouped",
       );
       const warningSummary =
         otherWarnings.length > 0
-          ? `\n\nUyarılar:\n${otherWarnings
+          ? `\n\nWarnings:\n${otherWarnings
               .slice(0, 5)
               .map(
                 (warning) =>
                   `• ${warning.message}${warning.location ? ` (${warning.location})` : ""}`,
               )
-              .join("\n")}${otherWarnings.length > 5 ? `\n• +${otherWarnings.length - 5} uyarı` : ""}`
+              .join("\n")}${otherWarnings.length > 5 ? `\n• +${otherWarnings.length - 5} warnings` : ""}`
           : "";
       window.alert(
-        `OpenAPI dışa aktarıldı: ${result.request_count} request, ${result.endpoint_count} operation.${grouped}${warningSummary}`,
+        `OpenAPI exported: ${result.request_count} request(s), ${result.endpoint_count} operation(s).${grouped}${warningSummary}`,
       );
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));

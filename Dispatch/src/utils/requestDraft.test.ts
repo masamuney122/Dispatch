@@ -22,6 +22,16 @@ describe("request draft utilities", () => {
     ).toBe("https://example.com/users?existing=updated&page=2");
   });
 
+  it("preserves environment templates while encoding query parameters", () => {
+    expect(
+      buildRequestUrl("{{baseUrl}}/users?existing={{ existingValue }}", [
+        { key: "{{queryKey}}", value: "{{ queryValue }}" },
+      ]),
+    ).toBe(
+      "{{baseUrl}}/users?existing={{ existingValue }}&{{queryKey}}={{ queryValue }}",
+    );
+  });
+
   it("only includes enabled, named headers in the request payload", () => {
     const tab = {
       ...createDefaultTab(),

@@ -7,7 +7,6 @@ import type { ArchiveMode } from "../../types/workspace";
 interface TopNavbarProps {
   workspaceName: string;
   onChangeWorkspace: () => Promise<void>;
-  onImportOpenApi: () => void | Promise<void>;
   onExportWorkspace: (mode: ArchiveMode) => Promise<void>;
   searchQuery: string;
   onSearchChange: (query: string) => void;
@@ -17,7 +16,6 @@ interface TopNavbarProps {
 export const TopNavbar: React.FC<TopNavbarProps> = ({
   workspaceName,
   onChangeWorkspace,
-  onImportOpenApi,
   onExportWorkspace,
   searchQuery,
   onSearchChange,
@@ -40,13 +38,13 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
       className="relative h-[32px] bg-[#252525] border-b border-[#363636] flex items-center justify-between shrink-0 gap-4 select-none text-sm font-sans"
       style={{ paddingLeft: platformCapabilities.desktop ? "88px" : "8px", paddingRight: "16px" }}
     >
-      {/* macOS window controls için boş ve sürüklenebilir alan */}
+      {/* Empty draggable area for macOS window controls */}
       <div className="relative flex min-w-0 items-center gap-2">
         {platformCapabilities.desktop && <div data-tauri-drag-region className="w-[8px] shrink-0" />}
         <button
           onClick={() => setWorkspaceMenuOpen((open) => !open)}
           className="flex max-w-[220px] items-center gap-1.5 truncate rounded px-2 py-0.5 text-xs font-medium text-zinc-400 transition hover:bg-[#333] hover:text-zinc-100"
-          title="Workspace değiştir"
+          title="Switch workspace"
         >
           <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
             <path d="M3 7.5h6l2 2h10v9H3z" />
@@ -57,30 +55,19 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
         </button>
         {workspaceMenuOpen && (
           <div className="absolute left-2 top-[28px] z-50 w-52 rounded-lg border border-[#444] bg-[#292929] p-1.5 shadow-xl">
-            <button
-              onClick={() =>
-                void Promise.resolve(onImportOpenApi()).finally(() =>
-                  setWorkspaceMenuOpen(false),
-                )
-              }
-              className="w-full rounded px-3 py-2 text-left text-xs text-zinc-300 hover:bg-[#383838]"
-            >
-              OpenAPI içe aktar
-            </button>
             {platformCapabilities.workspaceArchive && (
               <>
-                <div className="my-1 border-t border-[#414141]" />
                 <button
                   onClick={() => void onExportWorkspace("backup").finally(() => setWorkspaceMenuOpen(false))}
                   className="w-full rounded px-3 py-2 text-left text-xs text-zinc-300 hover:bg-[#383838]"
                 >
-                  Backup olarak dışa aktar
+                  Export as backup
                 </button>
                 <button
                   onClick={() => void onExportWorkspace("safe_share").finally(() => setWorkspaceMenuOpen(false))}
                   className="w-full rounded px-3 py-2 text-left text-xs text-zinc-300 hover:bg-[#383838]"
                 >
-                  Safe Share olarak dışa aktar
+                  Export as Safe Share
                 </button>
               </>
             )}
@@ -95,13 +82,13 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
               }
               className="w-full rounded px-3 py-2 text-left text-xs text-zinc-300 hover:bg-[#383838]"
             >
-              Workspace değiştir
+              Switch workspace
             </button>
           </div>
         )}
       </div>
 
-      {/* Orta: Arama Çubuğu (Arama Simgesi SAĞDA) */}
+      {/* Center: search bar (search icon on the right) */}
       <div className="absolute left-1/2 top-1/2 flex w-[320px] -translate-x-1/2 -translate-y-1/2 justify-center">
         <div className="relative flex w-full items-center">
           <input
@@ -129,7 +116,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
         </div>
       </div>
 
-      {/* Sağ: Marka ve Ayarlar */}
+      {/* Right: brand and settings */}
       <div className="flex items-center gap-3 shrink-0">
         <img
           src={`${import.meta.env.BASE_URL}branding/yapi-kredi-logo.png`}

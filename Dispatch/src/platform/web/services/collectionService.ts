@@ -38,7 +38,7 @@ async function mutate<T>(mutation: Record<string, unknown>, needsEntityId = fals
 }
 
 function requireEntity<T>(result: MutationResult<T>): T {
-  if (result.entity === null) throw new Error("Collection işlemi sonuç üretmedi.");
+  if (result.entity === null) throw new Error("The collection operation returned no result.");
   return result.entity;
 }
 

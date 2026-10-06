@@ -7,7 +7,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Collection, OrderItem, SavedRequest } from "../../types/collection";
 import type { Environment } from "../../types/environment";
 import type { HistoryItem } from "../../types/history";
@@ -36,6 +36,8 @@ interface ExplorerSidebarProps {
   mode: "collections" | "history";
   onSelectMode: (mode: "collections" | "history") => void;
   collections: Collection[];
+  onImportCurl: () => void;
+  onImportOpenApi: () => void;
   onCreateCollection: (name: string) => Promise<void>;
   onRenameCollection: (id: string, name: string) => Promise<void>;
   onDeleteCollection: (id: string) => Promise<void>;
@@ -80,6 +82,8 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
   mode,
   onSelectMode,
   collections,
+  onImportCurl,
+  onImportOpenApi,
   onCreateCollection,
   onRenameCollection,
   onDeleteCollection,
@@ -111,6 +115,8 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
   onDeleteRequest,
   onReorderItems,
 }) => {
+  const [importMenuOpen, setImportMenuOpen] = useState(false);
+  const importMenuRef = useRef<HTMLDivElement>(null);
   const [moveFolderTarget, setMoveFolderTarget] = useState<{
     collectionId: string;
     folderId: string;
@@ -168,6 +174,24 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
     onReorderItems,
   });
 
+  useEffect(() => {
+    if (!importMenuOpen) return;
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!importMenuRef.current?.contains(event.target as Node)) {
+        setImportMenuOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setImportMenuOpen(false);
+    };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [importMenuOpen]);
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -217,15 +241,56 @@ export const ExplorerSidebar: React.FC<ExplorerSidebarProps> = ({
                 </svg>
                 <span>COLLECTIONS</span>
               </div>
-              <button
-                onClick={() => void handleCreateCollection()}
-                className="p-1 text-zinc-400 hover:text-white hover:bg-[#282828] rounded transition-colors"
-                title="Create collection"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-0.5">
+                <div ref={importMenuRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setImportMenuOpen((open) => !open)}
+                    className="rounded p-1 text-zinc-400 transition-colors hover:bg-[#282828] hover:text-white"
+                    title="Import"
+                    aria-label="Import"
+                    aria-expanded={importMenuOpen}
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 4h10v4h6v12H4z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M14 4v4h6M12 11v6m0 0-2.5-2.5M12 17l2.5-2.5" />
+                    </svg>
+                  </button>
+                  {importMenuOpen && (
+                    <div className="absolute right-0 top-full z-50 mt-1 w-40 rounded-md border border-[#414141] bg-[#282828] p-1 shadow-xl">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setImportMenuOpen(false);
+                          onImportCurl();
+                        }}
+                        className="w-full rounded px-3 py-2 text-left text-xs font-medium text-zinc-200 transition-colors hover:bg-[#363636]"
+                      >
+                        Import as cURL
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setImportMenuOpen(false);
+                          onImportOpenApi();
+                        }}
+                        className="w-full rounded px-3 py-2 text-left text-xs font-medium text-zinc-200 transition-colors hover:bg-[#363636]"
+                      >
+                        Import OpenAPI
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => void handleCreateCollection()}
+                  className="rounded p-1 text-zinc-400 transition-colors hover:bg-[#282828] hover:text-white"
+                  title="Create collection"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
             {collectionsHeaderOpen && (

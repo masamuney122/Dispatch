@@ -46,5 +46,5 @@ export async function sendRequest(request: ApiRequest): Promise<ApiResponse> {
 
 export async function getAuthorizationCodeToken(request?: unknown): Promise<string> {
   void request;
-  throw new Error("OAuth 2.0 authorization code akışı web sürümünde desteklenmiyor.");
+  throw new Error("The OAuth 2.0 authorization code flow is not supported in the web version.");
 }

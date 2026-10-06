@@ -4,28 +4,27 @@ pub const MAX_OPENAPI_SIZE: usize = 10 * 1024 * 1024;
 
 pub fn parse_openapi(content: &str) -> Result<Value, String> {
     if content.len() > MAX_OPENAPI_SIZE {
-        return Err("OpenAPI içeriği 10 MB sınırını aşıyor".to_string());
+        return Err("OpenAPI content exceeds the 10 MB limit".to_string());
     }
     if content.trim().is_empty() {
-        return Err("OpenAPI içeriği boş olamaz".to_string());
+        return Err("OpenAPI content cannot be empty".to_string());
     }
     let spec: Value = if content.trim_start().starts_with('{') {
-        serde_json::from_str(content).map_err(|error| format!("Geçersiz OpenAPI JSON: {error}"))?
+        serde_json::from_str(content).map_err(|error| format!("Invalid OpenAPI JSON: {error}"))?
     } else {
-        serde_norway::from_str(content)
-            .map_err(|error| format!("Geçersiz OpenAPI YAML: {error}"))?
+        serde_norway::from_str(content).map_err(|error| format!("Invalid OpenAPI YAML: {error}"))?
     };
     let version = spec
         .get("openapi")
         .and_then(Value::as_str)
-        .ok_or_else(|| "Dosyada OpenAPI versiyonu bulunamadı".to_string())?;
+        .ok_or_else(|| "No OpenAPI version was found in the file".to_string())?;
     if !version.starts_with("3.0.") && !version.starts_with("3.1.") {
         return Err(format!(
-            "Desteklenmeyen OpenAPI versiyonu {version}. Dispatch Web, OpenAPI 3.0.x ve 3.1.x destekliyor"
+            "Unsupported OpenAPI version {version}. Dispatch supports OpenAPI 3.0.x and 3.1.x"
         ));
     }
     if !spec.get("paths").is_some_and(Value::is_object) {
-        return Err("OpenAPI belgesinde geçerli bir paths alanı bulunamadı".to_string());
+        return Err("No valid paths object was found in the OpenAPI document".to_string());
     }
     Ok(spec)
 }
@@ -38,7 +37,7 @@ pub fn serialize_openapi_yaml(spec: &Value) -> Result<String, String> {
             }
             yaml
         })
-        .map_err(|error| format!("OpenAPI YAML oluşturulamadı: {error}"))
+        .map_err(|error| format!("Failed to generate OpenAPI YAML: {error}"))
 }
 
 #[cfg(test)]

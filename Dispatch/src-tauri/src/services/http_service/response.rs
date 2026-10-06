@@ -11,6 +11,7 @@ pub(super) async fn into_api_response(
     mut response: reqwest::Response,
     started_at: Instant,
     max_response_size_mb: usize,
+    request_timeout_ms: u64,
 ) -> Result<ApiResponse, String> {
     let status = response.status().as_u16();
     let network = ResponseNetworkInfo {
@@ -45,14 +46,18 @@ pub(super) async fn into_api_response(
             .is_some_and(|length| length > maximum_bytes as u64)
     {
         return Err(format!(
-            "Response exceeds the configured {max_response_size_mb} MB limit."
+            "Response exceeds the configured {max_response_size_mb} MB limit. Increase Maximum response size in Global Settings or set it to 0 to disable the limit."
         ));
     }
     let mut bytes = Vec::new();
-    while let Some(chunk) = response.chunk().await.map_err(|error| error.to_string())? {
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|error| super::format_transport_error(error, request_timeout_ms))?
+    {
         if maximum_bytes > 0 && bytes.len().saturating_add(chunk.len()) > maximum_bytes {
             return Err(format!(
-                "Response exceeds the configured {max_response_size_mb} MB limit."
+                "Response exceeds the configured {max_response_size_mb} MB limit. Increase Maximum response size in Global Settings or set it to 0 to disable the limit."
             ));
         }
         bytes.extend_from_slice(&chunk);

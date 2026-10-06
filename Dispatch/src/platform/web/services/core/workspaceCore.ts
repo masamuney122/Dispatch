@@ -14,7 +14,7 @@ export async function validateWorkspace(
   try {
     return validate_workspace(manifestJson, collectionsJson, environmentsJson) as WorkspaceBundle;
   } catch (error) {
-    throw wasmError(error, "Workspace doğrulanamadı");
+    throw wasmError(error, "The workspace could not be validated");
   }
 }
 
@@ -27,6 +27,6 @@ export async function createWorkspaceBundle(
   try {
     return create_workspace_bundle(name, workspaceId, timestamp) as WorkspaceBundle;
   } catch (error) {
-    throw wasmError(error, "Workspace oluşturulamadı");
+    throw wasmError(error, "The workspace could not be created");
   }
 }

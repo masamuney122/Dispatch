@@ -34,19 +34,19 @@ export function OpenWorkspacePanel({
   return (
     <div className="mx-auto max-w-[760px]">
       <PanelHeading
-        title="Kaldığın yerden devam et"
-        description="Daha önce oluşturduğun Dispatch workspace klasörünü seç."
+        title="Continue where you left off"
+        description="Select a Dispatch workspace folder you created earlier."
       />
       <form className="mt-4" onSubmit={onSubmit}>
         <PathField
-          label="Workspace klasörü"
+          label="Workspace folder"
           value={path}
-          placeholder="Workspace klasörünün tam yolu"
+          placeholder="Full path to the workspace folder"
           onChange={onPathChange}
           onBrowse={onChooseDirectory}
           action={
             <PrimaryButton disabled={submitting}>
-              {submitting ? "Açılıyor…" : "Workspace'i aç"}
+              {submitting ? "Opening…" : "Open workspace"}
             </PrimaryButton>
           }
         />
@@ -56,7 +56,7 @@ export function OpenWorkspacePanel({
         <section className="mt-7 border-t border-[#383838] pt-5">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-400">
-              Son kullanılanlar
+              Recent workspaces
             </h3>
             <span className="text-[11px] text-zinc-600">
               {recentWorkspaces.length} workspace
@@ -114,31 +114,31 @@ export function CreateWorkspacePanel({
   return (
     <form className="mx-auto max-w-[760px]" onSubmit={onSubmit}>
       <PanelHeading
-        title="Yeni bir workspace oluştur"
-        description="Collection ve environment dosyaların seçtiğin boş klasörde oluşturulur."
+        title="Create a new workspace"
+        description="Your collection and environment files are created in the empty folder you select."
       />
       <div className="mt-6 space-y-5">
         <FieldLabel
-          label="Workspace adı"
-          description="Uygulama içinde ve son kullanılanlar listesinde görünecek ad."
+          label="Workspace name"
+          description="The name shown in the app and the recent workspaces list."
         >
           <input
             value={name}
             onChange={(event) => onNameChange(event.target.value)}
-            placeholder="Örneğin Payment API"
+            placeholder="For example, Payment API"
             className={workspaceInputClassName}
           />
         </FieldLabel>
         <PathField
-          label="Workspace klasörü"
-          description="Mevcut değilse oluşturulur; mevcutsa klasörün boş olması gerekir."
+          label="Workspace folder"
+          description="It will be created if it does not exist; an existing folder must be empty."
           value={path}
-          placeholder="Boş bir klasör seç"
+          placeholder="Select an empty folder"
           onChange={onPathChange}
           onBrowse={onChooseDirectory}
           action={
             <PrimaryButton disabled={submitting}>
-              {submitting ? "Oluşturuluyor…" : "Oluştur ve aç"}
+              {submitting ? "Creating…" : "Create and open"}
             </PrimaryButton>
           }
         />
@@ -169,15 +169,15 @@ export function ImportWorkspacePanel({
   return (
     <div className="mx-auto max-w-[760px]">
       <PanelHeading
-        title="Dispatch arşivini içe aktar"
-        description="Bir .dispatch yedeğini doğrula ve yeni, bağımsız bir workspace olarak aç."
+        title="Import a Dispatch archive"
+        description="Validate a .dispatch backup and open it as a new, independent workspace."
       />
       <div className="mt-6 space-y-5">
         <FilePickerField
-          label="Dispatch arşivi"
+          label="Dispatch archive"
           value={archivePath}
-          placeholder="Henüz bir .dispatch dosyası seçilmedi"
-          buttonLabel="Arşiv seç"
+          placeholder="No .dispatch file selected"
+          buttonLabel="Select archive"
           onBrowse={onChooseArchive}
         />
         {preview && (
@@ -191,7 +191,7 @@ export function ImportWorkspacePanel({
                   {preview.workspace_name}
                 </span>
                 <span className="mt-1 block text-[11px] text-zinc-500">
-                  {preview.mode === "safe_share" ? "Safe Share" : "Tam yedek"}
+                  {preview.mode === "safe_share" ? "Safe Share" : "Full backup"}
                 </span>
               </span>
             </div>
@@ -200,11 +200,11 @@ export function ImportWorkspacePanel({
           </div>
         )}
         <FilePickerField
-          label="Hedef klasör"
-          description="Workspace, seçtiğin klasörün altında kendi adıyla oluşturulur."
+          label="Destination folder"
+          description="The workspace is created under the selected folder using its own name."
           value={destinationParent}
-          placeholder="Workspace'in oluşturulacağı üst klasörü seç"
-          buttonLabel="Klasör seç"
+          placeholder="Select the parent folder where the workspace will be created"
+          buttonLabel="Select folder"
           onBrowse={onChooseDestination}
           action={
             <PrimaryButton
@@ -212,7 +212,7 @@ export function ImportWorkspacePanel({
               disabled={submitting || !preview || !destinationParent}
               onClick={() => void onImport()}
             >
-              {submitting ? "Aktarılıyor…" : "İçe aktar ve aç"}
+              {submitting ? "Importing…" : "Import and open"}
             </PrimaryButton>
           }
         />

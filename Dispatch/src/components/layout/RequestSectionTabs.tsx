@@ -37,7 +37,7 @@ export const RequestSectionTabs: React.FC<RequestSectionTabsProps> = ({
         ))}
       </div>
 
-      {/* Sağ: Cookies */}
+      {/* Right: Cookies */}
       <div className="py-1">
         <button onClick={onOpenCookies} className="text-sky-400 hover:underline font-semibold text-xs transition-colors">
           Cookies

@@ -207,7 +207,7 @@ export const RequestTabsBar: React.FC<RequestTabsBarProps> = ({
   return (
     <div className="h-8 border-b border-[#363636] bg-[#222222] flex items-center gap-0 shrink-0 select-none text-xs font-sans">
       <div className="flex h-full min-w-0 flex-1 items-center">
-        {/* Açık Sekmeler Listesi */}
+        {/* Open tabs list */}
         <OverlayScrollArea
           containerClassName="h-8 min-w-0 flex-1"
           axis="horizontal"
@@ -263,7 +263,7 @@ export const RequestTabsBar: React.FC<RequestTabsBarProps> = ({
                   {tab.dirty && (
                     <span
                       className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#ff6c37]"
-                      title="Kaydedilmemiş değişiklikler"
+                      title="Unsaved changes"
                     />
                   )}
                 </>
@@ -333,7 +333,7 @@ export const RequestTabsBar: React.FC<RequestTabsBarProps> = ({
           })}
         </OverlayScrollArea>
 
-        {/* Sekmeler kaydırılsa bile yeni tab butonu daima görünür kalır. */}
+        {/* Keep the new-tab button visible while the tabs scroll. */}
         <button
           draggable={false}
           onClick={onAddTab}
@@ -346,7 +346,7 @@ export const RequestTabsBar: React.FC<RequestTabsBarProps> = ({
         </button>
       </div>
 
-      {/* Sağ Köşe: Environment Seçicisi */}
+      {/* Right corner: environment selector */}
       <div className="flex h-full shrink-0 items-center border-l border-[#363636]">
         <EnvironmentSelector
           environments={environments}
