@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./Dispatch/public/branding/dispatch-wordmark-cropped.png" alt="Dispatch" width="360" />
+  <img src="./dispatch/public/branding/dispatch-wordmark-cropped.png" alt="Dispatch" width="360" />
 
   <h3>Desktop ve web üzerinde çalışan, local-first API geliştirme ortamı</h3>
 
