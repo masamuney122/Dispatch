@@ -17,11 +17,20 @@ interface ScriptWorkerRequest {
 }
 
 interface ScriptWorkerResponse {
-  id: string;
+  id?: string;
+  ready?: true;
+  initializationError?: string;
   result?: ScriptExecutionResult;
   error?: string;
   errorKind?: ScriptErrorKind;
 }
+
+let quickJsPromise: ReturnType<typeof getQuickJS> | null = null;
+
+const loadQuickJS = () => {
+  quickJsPromise ??= getQuickJS();
+  return quickJsPromise;
+};
 
 const errorMessage = (error: unknown) => {
   if (error instanceof Error) return error.message;
@@ -618,7 +627,7 @@ const handleWorkerMessage = async (event: MessageEvent<ScriptWorkerRequest>) => 
   const startedAt = performance.now();
 
   try {
-    const QuickJS = await getQuickJS();
+    const QuickJS = await loadQuickJS();
     const value = QuickJS.evalCode(createScriptProgram(input), {
       shouldInterrupt: shouldInterruptAfterDeadline(Date.now() + EXECUTION_TIMEOUT_MS),
       memoryLimitBytes: MEMORY_LIMIT_BYTES,
@@ -656,6 +665,17 @@ const handleWorkerMessage = async (event: MessageEvent<ScriptWorkerRequest>) => 
   }
 };
 
-if (typeof self !== "undefined") self.onmessage = handleWorkerMessage;
+if (typeof self !== "undefined") {
+  self.onmessage = handleWorkerMessage;
+  void loadQuickJS()
+    .then(() => {
+      self.postMessage({ ready: true } satisfies ScriptWorkerResponse);
+    })
+    .catch((error) => {
+      self.postMessage({
+        initializationError: errorMessage(error),
+      } satisfies ScriptWorkerResponse);
+    });
+}
 
 export {};

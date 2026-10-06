@@ -5,10 +5,13 @@ import type {
   ScriptExecutionResult,
 } from "../types/script";
 
-const WORKER_TIMEOUT_MS = 1_500;
+const RUNTIME_STARTUP_TIMEOUT_MS = 10_000;
+const WORKER_RESPONSE_WATCHDOG_MS = 5_000;
 
 interface ScriptWorkerResponse {
-  id: string;
+  id?: string;
+  ready?: true;
+  initializationError?: string;
   result?: ScriptExecutionResult;
   error?: string;
   errorKind?: ScriptErrorKind;
@@ -64,23 +67,54 @@ export const executeRequestScript = async (
 
   return new Promise((resolve) => {
     const id = crypto.randomUUID();
+    let settled = false;
+    let responseWatchdogId: number | undefined;
     const finish = (result: ScriptExecutionResult) => {
-      clearTimeout(timeoutId);
+      if (settled) return;
+      settled = true;
+      clearTimeout(startupTimeoutId);
+      if (responseWatchdogId !== undefined) clearTimeout(responseWatchdogId);
       worker.terminate();
       resolve(result);
     };
-    const timeoutId = window.setTimeout(() => {
+    const startupTimeoutId = window.setTimeout(() => {
       finish(
         failedResult(
           input,
-          `Script exceeded the ${WORKER_TIMEOUT_MS} ms execution limit`,
-          WORKER_TIMEOUT_MS,
-          "timeout",
+          `Script runtime could not initialize within ${RUNTIME_STARTUP_TIMEOUT_MS} ms`,
+          RUNTIME_STARTUP_TIMEOUT_MS,
+          "worker",
         )
       );
-    }, WORKER_TIMEOUT_MS);
+    }, RUNTIME_STARTUP_TIMEOUT_MS);
 
     worker.onmessage = (event: MessageEvent<ScriptWorkerResponse>) => {
+      if (event.data.ready) {
+        clearTimeout(startupTimeoutId);
+        responseWatchdogId = window.setTimeout(() => {
+          finish(
+            failedResult(
+              input,
+              `Script worker did not respond within ${WORKER_RESPONSE_WATCHDOG_MS} ms after initialization`,
+              Math.round((performance.now() - startedAt) * 10) / 10,
+              "worker",
+            )
+          );
+        }, WORKER_RESPONSE_WATCHDOG_MS);
+        worker.postMessage({ id, input });
+        return;
+      }
+      if (event.data.initializationError) {
+        finish(
+          failedResult(
+            input,
+            `Script runtime initialization failed: ${event.data.initializationError}`,
+            Math.round((performance.now() - startedAt) * 10) / 10,
+            "worker",
+          )
+        );
+        return;
+      }
       if (event.data.id !== id) return;
       if (event.data.result) {
         finish(event.data.result);
@@ -105,6 +139,5 @@ export const executeRequestScript = async (
         )
       );
     };
-    worker.postMessage({ id, input });
   });
 };
